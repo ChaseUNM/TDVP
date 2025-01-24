@@ -4,6 +4,7 @@ using SparseArrays
 
 include("vectorization.jl")
 
+#Create different operators for use in ITensor opsum operation
 ITensors.op(::OpName"Sx2", ::SiteType"Qubit") = [0 1; 1 0]
 ITensors.op(::OpName"Sy2", ::SiteType"Qubit") = [0 -im; im 0]
 ITensors.op(::OpName"Sz2", ::SiteType"Qubit") = [1 0; 0 -1]
@@ -65,6 +66,8 @@ function s_op_sparse(op, j, N)
     end
 end
 
+#All of the below functions are for different Hamiltonian models
+#Hamiltonian model without rotational frequency change and with time dependent term
 function time_MPO(t, p, ground_freq, cross_kerr, dipole, N, sites)
     os = OpSum() 
     for i = 1:N 
@@ -85,6 +88,7 @@ function time_MPO(t, p, ground_freq, cross_kerr, dipole, N, sites)
     return H 
 end
 
+#Same as above, exc ept the time dependent part is in terms of a vector instead of a function
 function time_MPO_param(step, pt0, ground_freq, cross_kerr, dipole, N, sites)
     os = OpSum() 
     for i = 1:N 
@@ -105,6 +109,7 @@ function time_MPO_param(step, pt0, ground_freq, cross_kerr, dipole, N, sites)
     return H 
 end
 
+#Simple Ising Model (https://en.wikipedia.org/wiki/Ising_model#Definition) with J_ij = 0, mu = 0 as an MPO
 function ising_mpo(N, sites)
     # Make N S=1/2 spin indices
     # sites = siteinds("S=1/2",N)
@@ -118,6 +123,7 @@ function ising_mpo(N, sites)
     return H
 end
 
+#xxx hamiltonain model as MPO
 function xxx_mpo(N, sites, J, g)
     os = OpSum()
     for i = 1:N - 1
@@ -130,6 +136,7 @@ function xxx_mpo(N, sites, J, g)
     return H 
 end
 
+#Ising Model with J_ij = 0, mu = 0 as matrix
 function Ising(N)
     H = zeros(ComplexF64, (2^N, 2^N))
     for j in 1:N - 1
@@ -138,6 +145,7 @@ function Ising(N)
     return H
 end
 
+#xxx hamiltonian as a matrix
 function xxx(N, J, g)
     H = zeros(ComplexF64, (2^N, 2^N))
     for j in 1:N - 1
@@ -149,6 +157,7 @@ function xxx(N, J, g)
     return H
 end
 
+#Sparse version of xxx hamiltonian matrix
 function xxx_sparse(N, J, g)
     H = spzeros(ComplexF64, (2^N, 2^N))
     for j in 1:N - 1

@@ -1,6 +1,7 @@
 using ITensors
 using LinearAlgebra
 
+#Helper function that matches indices between an MPO and MPS
 function match_index(M, R)
     M_inds = inds(M)
     R_inds = inds(R)
@@ -19,6 +20,7 @@ function match_index(M, R)
     return ind_match, ind_no_match 
 end
 
+#Converts a tensor to a vector
 function tensor_to_vec(T::ITensor)
     T_inds = inds(T)
     T_arr = Array(T, T_inds)
@@ -29,25 +31,16 @@ function tensor_to_vec(T::ITensor)
     return T_vec 
 end
 
+#Converts both an effective Hamiltonian and tensor to a Matrix and vector, respectively
+#Then checks if the conversion was correct by doing a multiplcation with this matrix and vector and checks against the tensor multiplication
 function conversion(H, M)
     H_contract = contract(H)
-    # println("M: ")
-    # println("--------------------------------")
-    # println(M_contract)
-    # println("R: ")
-    # println("--------------------------------")
-    # println(R)
+    #Gets indices of both tensors and determines which indices are matching and not matching
     H_inds = inds(H_contract)
-    # println(M_inds)
-    # println(M)
     M_inds = inds(M)
-    # println(R_inds)
-    # println("H_inds: ", H_inds)
-    # println("M_inds: ", M_inds)
     match_ind, ind_no_match = match_index(H_inds, M_inds)
-    # println(match_ind)
-    # println(ind_no_match)
-    # println("Number of open indices in H_eff: ", length(H_inds))
+
+    #Gets dimensions for row and columns of matrix
     row_H = 1 
     col_H = 1
     for i = 1:length(H_inds) 
@@ -57,9 +50,10 @@ function conversion(H, M)
             col_H *= dim(H_inds[i])
         end 
     end
-    # println(length(H_inds))
+    
+    #When working the tdvp and tdvp2 there will only be three different situations for the number of the indices
+    #below we convert the tensor object into an array in order to convert into a matrix
     if length(H_inds) == 4
-        # M_arr = Array(M_contract, M_inds[match_ind[1]], M_inds[match_ind[2]], M_inds[ind_no_match[1]], M_inds[ind_no_match[2]])
         H_arr = Array(H_contract, H_inds[ind_no_match[1]], H_inds[ind_no_match[2]], H_inds[match_ind[1]], H_inds[match_ind[2]])
     elseif length(H_inds) == 6
         H_arr = Array(H_contract, H_inds[ind_no_match[1]], H_inds[ind_no_match[2]], H_inds[ind_no_match[3]], H_inds[match_ind[1]]
@@ -68,36 +62,27 @@ function conversion(H, M)
         H_arr = Array(H_contract, H_inds[ind_no_match[1]], H_inds[ind_no_match[2]], H_inds[ind_no_match[3]], H_inds[ind_no_match[4]], H_inds[match_ind[1]]
         , H_inds[match_ind[2]], H_inds[match_ind[3]], H_inds[match_ind[4]])
     end
-    # println("M_arr")
-    # println(M_contract)
-    # H_arr2 = Array(H_contract, (H_inds[1], H_inds[2], H_inds[3], H_inds[4]))
-    # display(M_arr2[:,1,:,2])
-    # display(M_arr)
+    #Convert H_arr into a matrix and the M tensor into a vector
     H_mat = reshape(H_arr, (row_H, col_H))
-    # display(M_mat)
     M_arr = Array(M, M_inds)
-    # println("R_arr")
-    # display(R_arr)
     M_vec = reshape(M_arr, dim(M))
-    # display(R_vec)
-    # M_arr = Array(M_contract, (M_inds[1], M_inds[2], M_inds[3], M_inds[4]))
-    # println("R vec: ")
-    # display(R_vec)
-    # println("Multiplication 1: ", M_mat*R_vec)
-    # println("Multiplcation 2: ", tensor_to_vec(M_contract*R))
+
+    #Calculate both possible multiplcations in order to test if conversion was correct 
     mult1 = H_mat*M_vec
     mult2 = tensor_to_vec(H_contract*M)
-    # println("Multiplication difference: ", norm(mult1 - mult2))
-    if norm(mult1 - mult2) < 1E-15
+
+    #Returns H_mat and M_vec if conversion was successful, otherwise doesn't return and gives the error between the multiplcations
+    if norm(mult1 - mult2) < 1E-14
         # println("Multiplication difference: ", norm(mult1 - mult2))
         return H_mat, M_vec 
     else 
         println("Tensors not correctly converted to matrix/vector")
         println("Norm error: ", norm(mult1 - mult2))
-        return H_mat, M_vec
+        # return H_mat, M_vec
     end
 end
 
+#Creates effective Hamiltonian
 function effective_Hamiltonian(H, M, i)
     N = length(M)
     H_eff = MPO(N)
@@ -112,6 +97,7 @@ function effective_Hamiltonian(H, M, i)
     return H_eff
 end
 
+#Creates effective 2-site Hamiltonian
 function effective_Hamiltonian_2site(H, M, i)
     N = length(M)
     H_eff = MPO(N)
@@ -124,6 +110,7 @@ function effective_Hamiltonian_2site(H, M, i)
     return H_eff
 end
 
+#Creates effective 0-site Hamiltonian, which is referred to as K so I'm referring to it as the Kamiltonian
 function effective_Kamiltonian(H, M)
     N = length(M)
     K_eff = MPO(N)
@@ -134,38 +121,49 @@ function effective_Kamiltonian(H, M)
     return K_eff 
 end
 
+#Performs a single left-to-right sweep of an MPS using the tdvp, evolving forward one time step.
 function lr_sweep(H, M, h)
-    # println(orthoCenter(M))
+    
+    #Ensures orthogonality center is the first site
     orthogonalize!(M, 1)
-    println(orthoCenter(M))
+
     N = length(M)
     for i in 1:N - 1 
         println("Site: ", i)
+
+        #Creates effective Hamiltonian matrices and converts the i-th site to a vector
         H_eff = effective_Hamiltonian(H, M, i)
-        # println("H_eff: ", H_eff)
-        # println("M[1]: ", M[1])
-        # println("M[2] : ", M[2])
         H_mat, M_vec = conversion(H_eff, M[i])
+        #Evolves M_vec with H_mat with step size 'h'
         M_evolve = exp(-im*H_mat*h)*M_vec
+
+        #Converts back into a tensor
         M_inds = inds(M[i]) 
         M_evolve = ITensor(M_evolve, M_inds)
+
+        #Performs QR decomposition in order to get left-orthogonal tensor
         if i==1
             Q, R = qr(M_evolve, M_inds[1])
         else
             Q, R = qr(M_evolve, M_inds[1:2])
         end
+
+        #Set left-orthogonal tensor as new tensor in MPS
         M[i] = Q
-        # println("Q: ", Q)
-        # println("-------------------------------------")
-        # println("M: ", M)
+
+        #Creates effective Kamiltonian matrix and converts the upper triangular part from the QR into a vector
         K_eff = effective_Kamiltonian(H, M)
         K_mat, R_vec = conversion(K_eff, R)
+        #Evolves R_vec with K_mat and step size h
         R_evolve = exp(im*K_mat*h)*R_vec
+
+        #Convert R into tensor and multiply it with next tensor in the MPS and then replace
         R_inds = inds(R) 
         R_evolve = ITensor(R_evolve, R_inds)
         M[i + 1] = R_evolve*M[i + 1]
-        # println("M[$i] inds: ",inds(M[i]))
     end
+    
+    #Performs evolution on last site but without an QR decomposition as the MPS will be completely left-orthogonal.
     H_eff_N = effective_Hamiltonian(H, M, N)
     H_N_mat, M_N_vec = conversion(H_eff_N, M[N])
     M_N_evolve = exp(-im*H_N_mat*h)*M_N_vec 
@@ -173,39 +171,51 @@ function lr_sweep(H, M, h)
     M_N_evolve = ITensor(M_N_evolve, M_N_inds)
     M[N] .= M_N_evolve
     
+    #Return completely evolved MPS
     return M 
 end
 
+#Performs a single left-to-right sweep of an MPS using the 2 site tdvp, evolving forward one time step.
 function lr_sweep_2site(H, M, h)
+    
+    #Ensures orthogonalityu center is 1
     orthogonalize!(M, 1)
     N = length(M)
     for i in 1:N - 1 
         println("Site $i")
+        #Creates the 2-site Hamiltonian matrix and converts the 2 site M block (M[i]*M[i + 1]) to a vector
         H_eff_2 = effective_Hamiltonian_2site(H, M, i)
         M_block = M[i]*M[i + 1]
         H_mat_2, M_vec = conversion(H_eff_2, M_block)
         M_inds = inds(M_block)
+
+        #Evolves the M block forward with the effective Hamiltonian and convert back into a tensor
         M_evolve = exp(-im*H_mat_2*h)*M_vec
         M_evolve = ITensor(M_evolve, M_inds)
 
+        #Performs SVD on the M block to get new left-orthogonal tensor
         if i == 1
             U, S, V = svd(M_evolve, M_inds[1])
         else
             U, S, V = svd(M_evolve, M_inds[1:2])
         end
+
+        #Set the i-th tensor in MPS to be U which is left-orthogonal
         M[i] = U
-        # println("Inds: ", inds(U))
         M_n = S*V
 
+        #If we're not on the last M block then evolve the (S*V) tensor with the effective Hamiltonian
         if i != N - 1
             M_n_inds = inds(M_n)
             H_eff = effective_Hamiltonian(H, M, i + 1)
             H_mat, M2_vec = conversion(H_eff, M_n)
 
             M2_evolve = exp(im*H_mat*h)*M2_vec
-            M2_evolve = ITensor(M2_evolve, M_n_inds) 
+            M2_evolve = ITensor(M2_evolve, M_n_inds)
+            #Set next tensor to evolved (S*V) tensor
             M[i + 1] = M2_evolve
         elseif i == N - 1
+            #If on last site no evolution takes places
             M[i + 1] = S*V
         end
         
@@ -217,30 +227,21 @@ function tdvp(H, init, t0, T, steps)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
+
+    #Get step size
     h = (T - t0)/steps
+    #Create array to store evolved state
     storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
     storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
-    
-    fill_int = Int64(steps/2)
-    pt = [vcat(fill(0,fill_int), fill(0, fill_int)), vcat(fill(0, fill_int), fill(0, fill_int)), vcat(fill(0, fill_int), fill(0, fill_int)),
-    vcat(fill(4, fill_int), fill(4.5, fill_int))]
-    
-    ground_freq = [4.80595*(2*pi), 4.8601*(2*pi)]
-    cross_kerr = [0 0 0 0; 0 0 0 0; 0 0 0 0]
-    dipole = [0 .005*(2*pi) 0 0; 0 0 0 0; 0 0 0 0]
-    H = xxx_mpo(N, sites, 1, 1)
-    for i = 1:steps
-        # println("------------------------------------")
-        # H = xxx_mpo(N, sites, 1, 1)
-        println("Step: ", i)
-        # H = time_MPO_param(i, pt, ground_freq, cross_kerr, dipole, N, sites)
-        # println("Checking...: ", abs2.(reconstruct_arr(2, N, init, sites)))
-        init = lr_sweep(H, init, h)
-        # init .= M
-        # println("Checking... 2: ", abs2.(reconstruct_arr(2, N, init, sites))) 
-        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
 
+    #Run time stepper
+    for i = 1:steps
+        println("Step: ", i)
+        init = lr_sweep(H, init, h)
+        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
     end
+    
+    #Return evolved MPS, as well as state data at each time step
     return init, storage_arr
 end
 
@@ -248,30 +249,17 @@ function tdvp2(H, init, t0, T, steps)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
+    
+    #Get step size
     h = (T - t0)/steps
+    #Create arry to store evolved state
     storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
     storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
 
-    fill_int = Int64(steps/2)
-    pt = [vcat(fill(1,fill_int), fill(1.5, fill_int)), vcat(fill(2, fill_int), fill(2.5, fill_int)), vcat(fill(3, fill_int), fill(3.5, fill_int))]
-    # vcat(fill(4, fill_int), fill(4.5, fill_int))]
-    
-    ground_freq = [2 1 3]
-    cross_kerr = [0 0 0; 0 0 0; 0 0 0]
-    dipole = [0 1 0; 0 0 0; 0 0 0]
-
+    #Run time stepper
     for i = 1:steps
-        # println("------------------------------------")
-        # H = xxx_mpo(N, sites, 1, 1)
         println("Step: ", i)
-        # H = time_MPO_param(i, pt, ground_freq, cross_kerr, dipole, N, sites)
-        # H_mat = matrix_form(time_MPO_param(i, pt, [2, 1, 3], [0 0 0; 0 0 0; 0 0 0], [0 1.0 0; 0 0 0; 0 0 0], N, sites), sites)
-        # println("Checking...: ", abs2.(reconstruct_arr(2, N, init, sites)))
-        println("init: ", init)
         init = lr_sweep_2site(H, init, h)
-        println("init: ", init)
-        # init .= M
-        # println("Checking... 2: ", abs2.(reconstruct_arr(2, N, init, sites))) 
         storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
 
     end
