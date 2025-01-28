@@ -129,7 +129,7 @@ function lr_sweep(H, M, h)
 
     N = length(M)
     for i in 1:N - 1 
-        println("Site: ", i)
+        # println("Site: ", i)
 
         #Creates effective Hamiltonian matrices and converts the i-th site to a vector
         H_eff = effective_Hamiltonian(H, M, i)
@@ -176,13 +176,13 @@ function lr_sweep(H, M, h)
 end
 
 #Performs a single left-to-right sweep of an MPS using the 2 site tdvp, evolving forward one time step.
-function lr_sweep_2site(H, M, h)
+function lr_sweep_2site(H, M, h, cutoff)
     
     #Ensures orthogonalityu center is 1
     orthogonalize!(M, 1)
     N = length(M)
     for i in 1:N - 1 
-        println("Site $i")
+        # println("Site $i")
         #Creates the 2-site Hamiltonian matrix and converts the 2 site M block (M[i]*M[i + 1]) to a vector
         H_eff_2 = effective_Hamiltonian_2site(H, M, i)
         M_block = M[i]*M[i + 1]
@@ -195,9 +195,11 @@ function lr_sweep_2site(H, M, h)
 
         #Performs SVD on the M block to get new left-orthogonal tensor
         if i == 1
-            U, S, V = svd(M_evolve, M_inds[1])
+            U, S, V = svd(M_evolve, M_inds[1], cutoff = cutoff)
+            println("Singular Values: ", diag(Array(S, inds(S))))
         else
-            U, S, V = svd(M_evolve, M_inds[1:2])
+            U, S, V = svd(M_evolve, M_inds[1:2], cutoff = cutoff)
+            println("Singular Values: ", diag(Array(S, inds(S))))
         end
 
         #Set the i-th tensor in MPS to be U which is left-orthogonal
@@ -223,7 +225,51 @@ function lr_sweep_2site(H, M, h)
     return M
 end
 
-function tdvp(H, init, t0, T, steps)
+function tdvp_constant(H, init, t0, T, steps)
+    N = length(init)
+    orthogonalize!(init, 1)
+    sites = siteinds(init)
+
+    #Get step size
+    h = (T - t0)/steps
+    #Create array to store evolved state
+    storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
+    storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
+
+    #Run time stepper
+    for i = 1:steps
+        # println("Step: ", i)
+        init = lr_sweep(H, init, h)
+        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
+    end
+    
+    #Return evolved MPS, as well as state data at each time step
+    return init, storage_arr
+end
+
+function tdvp2_constant(H, init, t0, T, steps, cutoff)
+    N = length(init)
+    orthogonalize!(init, 1)
+    sites = siteinds(init)
+    
+    #Get step size
+    h = (T - t0)/steps
+    #Create arry to store evolved state
+    storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
+    storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
+
+    #Run time stepper
+    for i = 1:steps
+        # println("Step: ", i)
+        init = lr_sweep_2site(H, init, h, cutoff)
+        println("Link Dimensions at step $i: ", linkdims(init))
+        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
+
+    end
+    return init, storage_arr
+end
+
+function tdvp_time(H, init, t0, T, steps)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
@@ -237,7 +283,7 @@ function tdvp(H, init, t0, T, steps)
     #Run time stepper
     for i = 1:steps
         println("Step: ", i)
-        init = lr_sweep(H, init, h)
+        init = lr_sweep(H(i), init, h)
         storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
     end
     
@@ -245,23 +291,24 @@ function tdvp(H, init, t0, T, steps)
     return init, storage_arr
 end
 
-function tdvp2(H, init, t0, T, steps)
+function tdvp2_time(H, init, t0, T, steps, cutoff)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
-    
+
     #Get step size
     h = (T - t0)/steps
-    #Create arry to store evolved state
+    #Create array to store evolved state
     storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
     storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
 
     #Run time stepper
     for i = 1:steps
         println("Step: ", i)
-        init = lr_sweep_2site(H, init, h)
+        init = lr_sweep(H(i), init, h, cutoff)
         storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
-
     end
+    
+    #Return evolved MPS, as well as state data at each time step
     return init, storage_arr
 end

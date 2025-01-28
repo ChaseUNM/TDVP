@@ -13,6 +13,7 @@ ITensors.op(::OpName"a+a", ::SiteType"Qubit") = [0 0; 0 1]
 ITensors.op(::OpName"aa+", ::SiteType"Qubit") = [1 0; 0 0]
 ITensors.op(::OpName"a", ::SiteType"Qubit") = [0 1; 0 0]
 ITensors.op(::OpName"a+", ::SiteType"Qubit") = [0 0; 1 0]
+ITensors.op(::OpName"-Sy2", ::SiteType"Qubit") = [0 im; -im 0]
 
 sx = [0 1; 1 0]
 sy = [0 -im; im 0]
@@ -89,11 +90,12 @@ function time_MPO(t, p, ground_freq, cross_kerr, dipole, N, sites)
 end
 
 #Same as above, exc ept the time dependent part is in terms of a vector instead of a function
-function time_MPO_param(step, pt0, ground_freq, cross_kerr, dipole, N, sites)
+function time_MPO_param(step, pt0, qt0, ground_freq, cross_kerr, dipole, N, sites)
     os = OpSum() 
     for i = 1:N 
         os += ground_freq[N - i + 1], "a+a", i
-        os += pt0[i][step], "Sx2", N - i + 1
+        os += pt0[i,step], "Sx2", N - i + 1
+        os += qt0[i,step], "-Sy2", N - i + 1
         #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
         if  i != N
             for j = i + 1:N
