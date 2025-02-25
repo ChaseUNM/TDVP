@@ -30,13 +30,8 @@ function reconstruct_arr(d, N, psi, sites)
         end
         # println("V: ", V)
         v = scalar(V)
-        if norm(v) > 0.0
-            # println("Loc $i: ",v)
-            # println(el)
-            loc = bitarr_to_int_p_1(reverse(el .- 1))
-            reconstruct_arr[loc]  = v
-        end
-       
+        loc = bitarr_to_int_p_1(reverse(el .- 1))
+        reconstruct_arr[loc]  = v       
     end
     return reconstruct_arr
 end

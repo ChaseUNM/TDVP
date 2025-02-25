@@ -6,7 +6,7 @@ include("hamiltonian.jl")
 include("tdvp.jl")
 
 #Create 2 qubit site with the xxx heisenberg model
-N = 8
+N = 7
 sites = siteinds("Qubit", N)
 H = xxx_mpo(N, sites, -1, 1)
 H_mat = xxx(N, -1,1)
@@ -116,11 +116,14 @@ end
 
 
 let 
-    pts = 100
+    pts = 200
     max_dim = 8
     err_arr = zeros(max_dim, pts)
-    h = LinRange(1E-10, 1E-1, pts)
-    
+    # h = LinRange(1E-, 1E-0, pts)
+    h = LinRange(0, 3, pts)
+    h = 10 .^-h 
+    h = reverse(h)
+    println(h)
     init = zeros(ComplexF64,2^N)
     init[1] = 1.0 + 0.0*im
     # init = U[:,1]
@@ -167,10 +170,11 @@ let
     end
 
     p1 = plot(h, err_arr', xscale =:log10, yscale=:log10, labels = ["Max dim = 1" "Max dim = 2" "Max dim = 3" "Max dim = 4" "Max dim = 5" "Max dim = 6" "Max dim = 7" "Max dim = 8"], 
-    legend=:topleft, ylabel = "error", xlabel = L"\Delta t", dpi = 150)
+    legend=:topleft, ylabel = "error", xlabel = L"\Delta t", dpi = 150, legendfontsize = 5, xticks = [1E-10, 1E-9, 1E-8, 1E-7, 1E-6, 1E-5, 1E-4, 1E-3, 1E-2, 1E-1, 1E0], 
+    yticks = [1E-30, 1E-25, 1E-20, 1E-15, 1E-10, 1E-5])
     plot!(h, h.^2, linestyle =:dash, linewidth =:2, linecolor =:black, label = L"(\Delta t)^2")
-    # display(p1)
-    # savefig("ErrorMaxDim.png")
+    display(p1)
+    savefig("ErrorAllTo1.png")
 end
 
 # let

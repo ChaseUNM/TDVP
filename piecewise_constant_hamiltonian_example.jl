@@ -31,7 +31,7 @@ splines = 2
 #Set initial condition to be [0 1 0 0]
 init = zeros(ComplexF64,2^N)
 init[1] = 1.0 + 0.0*im 
-M_init = MPS(init, sites, maxdim = 1)
+M_init = MPS(init, sites, maxdim = 2)
 
 pt0 = [1 2; 1.5 2.5]
 qt0 = [-1 -2; -1.5 -2.5]
@@ -48,7 +48,6 @@ function H_t(i)
     return H 
 end
 
-display(H_t(99))
 
 let
     false_count = 0
@@ -62,15 +61,15 @@ let
 end
 
 
-# M_n, population = tdvp_time(H_t_MPO, M_init, t0, T, steps)
+M_n, population = tdvp_time(H_t_MPO, M_init, t0, T, steps)
 # g1 = plot(range(0, steps).*(T/steps), abs2.(population))
 # display(g1)
 
 M_init = MPS(init, sites)
 
-# M_n_2, population2 = tdvp2_time(H_t_MPO, M_init, t0, T, steps, 0)
+M_n_2, population2 = tdvp2_time(H_t_MPO, M_init, t0, T, steps, 0)
 
-test_tdvp = false
+test_tdvp = true
 
 let
     if test_tdvp == true
@@ -86,13 +85,17 @@ let
         end
         
         #Will plot the errors between both the tdvp methods and matrix exponential time stepping
-    
+        
         y1 = plot(range(0, steps).*(T/steps), norm.(storage_arr - population), xlabel = "t", ylabel = "error", 
-        plot_title = "Error: 1TDVP and Matrix Exponentiation",labels = ["|00>" "|01>" "|10>" "|11>"])
+        plot_title = "Error: 1TDVP and Matrix Exponentiation",labels = ["|00>" "|01>" "|10>" "|11>"], dpi = 150)
         y2 = plot(range(0, steps).*(T/steps), norm.(storage_arr - population2), xlabel = "t", ylabel = "error", 
-        plot_title = "Error: 2TDVP and Matrix Exponentiation",labels = ["|00>" "|01>" "|10>" "|11>"], reuse = false)
+        plot_title = "Error: 2TDVP and Matrix Exponentiation",labels = ["|00>" "|01>" "|10>" "|11>"], reuse = false, dpi = 150)
         plots = plot(y1, y2)
-        display(plots)
+        sol = plot(range(0, steps).*(T/steps), abs2.(storage_arr), xlabel = "t", ylabel = "Population", plot_title = "Matrix Exponentation Evolution",
+        labels = ["|00>" "|01>" "|10>" "|11>"], reuse = false, dpi = 150)
+        savefig(y1, "PiecewiseConstantTDVP.png")
+        savefig(y2, "PiecewiseConstantTDVP2.png")
+        savefig(sol, "PiecewiseConstantEvolution.png")
     end
 end
 
