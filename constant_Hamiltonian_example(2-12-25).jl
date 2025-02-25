@@ -1,24 +1,29 @@
 using ITensors, ITensorMPS
-using Plots, LaTeXStrings, LinearAlgebra
+using Plots, LaTeXStrings, LinearAlgebra, Random
 
+Random.seed!(42)
 include("hamiltonian.jl")
 include("tdvp.jl")
 
 #Create 2 qubit site with the xxx heisenberg model
-N = 2
+N = 8
 sites = siteinds("Qubit", N)
 H = xxx_mpo(N, sites, -1, 1)
 H_mat = xxx(N, -1,1)
-display(H_mat)
+
 eig = eigvals(H_mat)
 F = eigen(H_mat)
-println(eig)
+
 U = F.vectors
 eigs = F.values
 # display(U[:,1])
-display(U[:,4])
+
+
 max_eig = maximum(abs.(eig))
 min_eig = minimum(abs.(eig))
+println(length(U[1,:]))
+println(max_eig)
+println(min_eig)
 long_period = 2*pi/min_eig 
 short_period = 2*pi/max_eig
 
@@ -34,56 +39,31 @@ short_period = 2*pi/max_eig
 
 #Set initial condition to be [1 0 0 0]
 init = zeros(ComplexF64,2^N)
-# init[1] = 1.0 + 0.0*im
+init[1] = 1.0 + 0.0*im
 # init[4] = 1.0 + 0.0*im
-# init = rand(ComplexF64, 2^N)
-init = [1, 2, 3, 4]
-init = init/norm(init)
-# init = U[:,4]
-# init = (1/sqrt(2))*F.vectors[:,1] + (1/sqrt(2))*F.vectors[:,6]
-M_init = MPS(init, sites, maxdim = 1)
-orthogonalize!(M_init, 1)
-println(M_init[1])
-println(M_init[2])
-# println(orthoCenter(M_init))
-println("-------------B2----------------")
-println(M_init[2])
-B2 = Array(M_init[2], inds(M_init[2]))
-# println(B2[:,1]'*B2[:,1] + B2[:,2]'*B2[:,2])
-# println(B2[:,1]'*B2[:,2])
-println("Right projector: ")
-display(B2*B2')
-right_proj = B2*B2'
-display(right_proj) 
-display(right_proj*right_proj)
-P1 = kron([1 0; 0 1], right_proj)
-first = P1*H_mat*(-im) 
-display(first)
-display((P1*H_mat) - (P1*H_mat)')
-println("----------------------------------------------------")
+
+
+M_init = MPS(init, sites)
+
+A2 = M_init[2]
+A2_arr = Array(A2, inds(A2))
+display(A2_arr[:,2,:]*A2_arr[:,2,:]')
 
 # function right_projector
 
 println("Link Dimensions before: ", linkdims(M_init))
 #Set initial time, final time, and number of steps
 t0 = 0.0
-T = 20
+T = 1E-4
 steps = 1
 step_size = (T - t0)/steps
 
 #Run tdvp 
 M_n, population = tdvp_constant(H, M_init, t0, T, steps)
-println("Pop!!!!: ", population[end,:])
-u = exp(-im.*H_mat.*step_size)*init
-println("Pop!!!: ", u)
-A1 = Array(M_n[1], inds(M_n[1]))
-println(M_n[1])
-display(A1)
-println(A1[1,:]*A1[1,:]')
-println("Left Projector: ")
-left_proj = A1*A1'
-display(left_proj)
-display(left_proj*left_proj)
+
+#Compare evolved TDVP with just matrix exponential 
+u = exp(-im*H_mat*(T - t0))*init 
+println(norm(population[end,:] - u))
 
 # println("Link Dimensions after TDVP:", linkdims(M_n))
 #Reset initial condition
@@ -113,16 +93,10 @@ let
             err_tdvp[i] = norm(storage_arr[i,:] - population[i,:])
             # err_tdvp2[i] = norm(storage_arr[i,:] - population2[i,:])
         end
-        println(size(population))
-        println(size(population[:,4]))
-        println(init)
         x_range = range(0, steps).*(T/steps)
-        pop_plot = plot(x_range, [real(population[:,4]) imag(population[:,4]) real(U[1,4]).*cos.(max_eig.*x_range) -real(U[1,4]).*sin.(max_eig.*x_range)], xlabel = "t", 
-        labels = ["TDVP: real part" "TDVP: imaginary part" "Exact: real part" "Exact: imaginary part"], legend=:topleft)
+        pop_plot = plot(x_range, [real(storage_arr[:,1]) imag(storage_arr[:,1])], labels = ["Real Part" "Imaginary Part"], xlabel = "t", dpi = 150)
+        savefig("Dynamics1.png")
         # savefig("Dynamics.png")
-        err_plot = plot(x_range, [real(population[:,4]).-real(U[1,4]).*cos.(max_eig.*x_range) imag(population[:,4])+real(U[1,4]).*sin.(max_eig.*x_range)], xlabel = "t",
-        labels = ["Error: Real Part" "Error: Imaginary Part"])
-        savefig("Error.png")
         #[1/sqrt(2)*cos.(3.49 .*x_range).-1/(2*sqrt(2))*cos.(x_range) 0.29/sqrt(2)*sin.(3.49 .*x_range)+1/(2*sqrt(2))sin.(x_range)]
         # check_plot = plot(x_range, 
         # [0.29/sqrt(2)*cos.(3.49 .*x_range).-1/(2*sqrt(2))*cos.(x_range) real(storage_arr[:,2]) imag(storage_arr[:,2]) 0.29/sqrt(2)*sin.(3.49 .*x_range).+1/(2*sqrt(2))*sin.(x_range)])
@@ -139,36 +113,65 @@ let
     end
 end
 
-# let 
-#     h = LinRange(0.1, 0.5, 50)
-#     # h_size = (50:-1:5)
-#     err = zeros(length(h))
-#     arr_number = 1
-#     t0 = 0.0
+
+
+let 
+    pts = 100
+    max_dim = 8
+    err_arr = zeros(max_dim, pts)
+    h = LinRange(1E-10, 1E-1, pts)
     
-#     init = zeros(ComplexF64,2^N)
-#     init[1] = 1.0 + 0.0*im 
-#     for i in h
+    init = zeros(ComplexF64,2^N)
+    init[1] = 1.0 + 0.0*im
+    # init = U[:,1]
+    c = U\init 
+    C_diag = diagm(c)
+    CU = U*C_diag
+    
+    
+    for max in 1:max_dim
+        
+        # h_size = (50:-1:5)
+        err = zeros(length(h))
+        arr_number = 1
+        t0 = 0.0
+        
+        
+        
+        # init[2] = 1.0/sqrt(2) + 0.0*im
+        
+        # init = U[1,:]
+
+        #Construct the exact solution using eigenvectors and eigenvalues 
+        
+        for i in h
+                
+            M_init = MPS(init, sites, maxdim = max)
+            println("Step size #$arr_number")
+            # h = 1/i
+            T = i
+            # steps = Int64((T - t0)*i)
             
-#         M_init = MPS(init, sites, maxdim = 1)
-#         println("Step size #$arr_number")
-#         # h = 1/i
-#         T = i
-#         # steps = Int64((T - t0)*i)
-#         init = zeros(ComplexF64,2^N)
-#         init[1] = 1.0 + 0.0*im 
-#         M, population = tdvp_constant(H, M_init, t0, T, 1)
-#         u = exp(-im.*H_mat*T)*init 
-#         err[arr_number] = norm(population[end,:] - u)
-#         arr_number += 1
-#     end
-#     # h = 1 ./h_size
-#     h2 = h.^2
-#     println(h2)
-#     e_p = plot(h, [err h2], xlabel = "H_size", ylabel = "Error", labels = ["Error" L"h^2"], legend=:topleft, title = "Bond Dimension = 1")
-#     display(e_p)
-#     savefig(e_p, "StepSizeBondDim1.png")
-# end
+            M, population = tdvp_constant(H, M_init, t0, T, 1)
+            # println("Link dims: ", linkdims(M))
+            u = exp(-im.*H_mat*T)*init
+            # expEig = exp.(-im*eigs*T)
+            # exactSol = CU*expEig
+            err[arr_number] = norm(population[end,:] - u)
+            arr_number += 1
+        end
+        
+        err_arr[max, :] = err
+        # h = 1 ./h_size
+        h2 = h.^2
+    end
+
+    p1 = plot(h, err_arr', xscale =:log10, yscale=:log10, labels = ["Max dim = 1" "Max dim = 2" "Max dim = 3" "Max dim = 4" "Max dim = 5" "Max dim = 6" "Max dim = 7" "Max dim = 8"], 
+    legend=:topleft, ylabel = "error", xlabel = L"\Delta t", dpi = 150)
+    plot!(h, h.^2, linestyle =:dash, linewidth =:2, linecolor =:black, label = L"(\Delta t)^2")
+    # display(p1)
+    # savefig("ErrorMaxDim.png")
+end
 
 # let
 #     err = []

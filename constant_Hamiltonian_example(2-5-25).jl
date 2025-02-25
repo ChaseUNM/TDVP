@@ -9,14 +9,14 @@ N = 2
 sites = siteinds("Qubit", N)
 H = xxx_mpo(N, sites, -1, 1)
 H_mat = xxx(N, -1,1)
-display(H_mat)
+# display(H_mat)
 eig = eigvals(H_mat)
 F = eigen(H_mat)
-println(eig)
+# println(eig)
 U = F.vectors
 eigs = F.values
 # display(U[:,1])
-display(U[:,4])
+# display(U[:,4])
 max_eig = maximum(abs.(eig))
 min_eig = minimum(abs.(eig))
 long_period = 2*pi/min_eig 
@@ -43,23 +43,26 @@ init = init/norm(init)
 # init = (1/sqrt(2))*F.vectors[:,1] + (1/sqrt(2))*F.vectors[:,6]
 M_init = MPS(init, sites, maxdim = 1)
 orthogonalize!(M_init, 1)
-println(M_init[1])
-println(M_init[2])
+# println(M_init[1])
+# println(M_init[2])
 # println(orthoCenter(M_init))
 println("-------------B2----------------")
-println(M_init[2])
+# println(M_init[2])
 B2 = Array(M_init[2], inds(M_init[2]))
 # println(B2[:,1]'*B2[:,1] + B2[:,2]'*B2[:,2])
 # println(B2[:,1]'*B2[:,2])
-println("Right projector: ")
-display(B2*B2')
+# println("Right projector: ")
+# display(B2*B2')
 right_proj = B2*B2'
-display(right_proj) 
-display(right_proj*right_proj)
+# display(right_proj) 
+# display(right_proj*right_proj)
 P1 = kron([1 0; 0 1], right_proj)
-first = P1*H_mat*(-im) 
+first = P1*H_mat*(-im)
+first_commute = -im*H_mat*P1 
 display(first)
-display((P1*H_mat) - (P1*H_mat)')
+display(first_commute)
+display(first - first_commute)
+# display((P1*H_mat) - (P1*H_mat)')
 println("----------------------------------------------------")
 
 # function right_projector
@@ -73,17 +76,17 @@ step_size = (T - t0)/steps
 
 #Run tdvp 
 M_n, population = tdvp_constant(H, M_init, t0, T, steps)
-println("Pop!!!!: ", population[end,:])
+# println("Pop!!!!: ", population[end,:])
 u = exp(-im.*H_mat.*step_size)*init
-println("Pop!!!: ", u)
+# println("Pop!!!: ", u)
 A1 = Array(M_n[1], inds(M_n[1]))
-println(M_n[1])
-display(A1)
-println(A1[1,:]*A1[1,:]')
-println("Left Projector: ")
+# println(M_n[1])
+# display(A1)
+# println(A1[1,:]*A1[1,:]')
+# println("Left Projector: ")
 left_proj = A1*A1'
-display(left_proj)
-display(left_proj*left_proj)
+# display(left_proj)
+# display(left_proj*left_proj)
 
 # println("Link Dimensions after TDVP:", linkdims(M_n))
 #Reset initial condition

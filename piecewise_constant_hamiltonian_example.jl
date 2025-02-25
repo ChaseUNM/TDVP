@@ -5,85 +5,88 @@ using NPZ
 include("hamiltonian.jl")
 include("tdvp.jl")
 
+Random.seed!(42)
 
 N = 2
 sites = siteinds("Qubit", N)
-freq_01 = [4.80595, 4.8601]
-freq_01 .*= 2*pi 
+freq_01 = [1, 2]
+freq_01 .*= 1 
 
 cross_kerr = [0 0 ; 0 0]
-Jkl = [0 0.005; 0 0]
-Jkl .*= 2*pi 
+Jkl = [0 0.5; 0 0]
+Jkl .*= 1 
 
 
-T = 100.0
+T = 2.0
 t0 = 0.0
-steps = 1000
+steps = 100
 splines = 2
-fill_int = Int64(steps/splines)
 
 
-function repeat_elements(arr, n)
-    """
-    Repeats each element in the array `arr` exactly `n` times.
-    
-    Parameters:
-        arr (Vector): The input array of numbers.
-        n (Int): The number of repetitions for each element.
-    
-    Returns:
-        Vector: The array with repeated elements.
-    """
-    vcat([fill(x, n) for x in arr]...)
-end
 
-Random.seed!(42)
 
-# pt_list = rand(splines)*5
-# qt_list = rand(splines)*5
 
-# pt0 = hcat(repeat_elements(pt_list, fill_int), repeat_elements(qt_list, fill_int))'
-# qt0 = hcat(repeat_elements(qt_list, fill_int), repeat_elements(qt_list, fill_int))'
-
-pt0 = hcat(vcat(fill(2, fill_int), fill(2.5, fill_int)), vcat(fill(3, fill_int), fill(3.5, fill_int)))'
-pt0 = hcat(vcat(fill(-2, fill_int), fill(-2.5, fill_int)), vcat(fill(-3, fill_int), fill(-3.5, fill_int)))'
+# pt0 = hcat(vcat(fill(2, fill_int), fill(2.5, fill_int)), vcat(fill(3, fill_int), fill(3.5, fill_int)))'
+# pt0 = hcat(vcat(fill(-2, fill_int), fill(-2.5, fill_int)), vcat(fill(-3, fill_int), fill(-3.5, fill_int)))'
 #Set initial condition to be [0 1 0 0]
 init = zeros(ComplexF64,2^N)
-init[2] = 1.0 + 0.0*im 
-M_init = MPS(init, sites)
+init[1] = 1.0 + 0.0*im 
+M_init = MPS(init, sites, maxdim = 1)
 
+pt0 = [1 2; 1.5 2.5]
+qt0 = [-1 -2; -1.5 -2.5]
 
-function H_t(i)
-    H = time_MPO_param(i, pt0, qt0, freq_01, cross_kerr, Jkl, N, sites)
+pt_pulse, qt_pulse = downsample_pulse(pt0, qt0, splines, steps)
+
+function H_t_MPO(i)
+    H = piecewise_H_MPO_no_rot(i, pt_pulse, freq_01, cross_kerr, Jkl, N, sites)
     return H 
 end
 
+function H_t(i)
+    H = piecewise_H_no_rot(i, pt_pulse, freq_01, cross_kerr, Jkl, N)
+    return H 
+end
+
+display(H_t(99))
+
+let
+    false_count = 0
+    for i in 1:steps 
+        H_mat_test = H_t(i)
+        if ishermitian(H_mat_test) == false
+            false_count += 1
+        end
+    end
+    println("We have $false_count times where the Hamiltonian is not hermitian")
+end
 
 
-M_n, population = tdvp_time(H_t, M_init, t0, T, steps)
-g1 = plot(range(0, steps).*(T/steps), abs2.(population))
-display(g1)
+# M_n, population = tdvp_time(H_t_MPO, M_init, t0, T, steps)
+# g1 = plot(range(0, steps).*(T/steps), abs2.(population))
+# display(g1)
 
 M_init = MPS(init, sites)
 
-M_n_2, population2 = tdvp2_time(H_t, M_init, t0, T, steps)
+# M_n_2, population2 = tdvp2_time(H_t_MPO, M_init, t0, T, steps, 0)
 
 test_tdvp = false
 
 let
-    storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
-    storage_arr[1,:] = init
-    step_size = (T - t0)/steps
-    
-    for i in 1:steps 
-        H_mat = matrix_form(H_t(i), sites)
-        u = exp(-im.*H_mat.*step_size)*init
-        init .= u
-        storage_arr[i + 1,:] = init
-    end
-    
-    #Will plot the errors between both the tdvp methods and matrix exponential time stepping
     if test_tdvp == true
+        storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
+        storage_arr[1,:] = init
+        step_size = (T - t0)/steps
+        
+        for i in 1:steps 
+            H_mat = H_t(i)
+            u = exp(-im.*H_mat.*step_size)*init
+            init .= u
+            storage_arr[i + 1,:] = init
+        end
+        
+        #Will plot the errors between both the tdvp methods and matrix exponential time stepping
+    
         y1 = plot(range(0, steps).*(T/steps), norm.(storage_arr - population), xlabel = "t", ylabel = "error", 
         plot_title = "Error: 1TDVP and Matrix Exponentiation",labels = ["|00>" "|01>" "|10>" "|11>"])
         y2 = plot(range(0, steps).*(T/steps), norm.(storage_arr - population2), xlabel = "t", ylabel = "error", 
@@ -92,6 +95,9 @@ let
         display(plots)
     end
 end
+
+
+
 
 # let
 #     for N in 2:8 

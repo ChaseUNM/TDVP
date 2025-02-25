@@ -1,6 +1,7 @@
 using ITensors
 using LinearAlgebra
 
+
 #Helper function that matches indices between an MPO and MPS
 function match_index(M, R)
     M_inds = inds(M)
@@ -72,7 +73,7 @@ function conversion(H, M)
     mult2 = tensor_to_vec(H_contract*M)
 
     #Returns H_mat and M_vec if conversion was successful, otherwise doesn't return and gives the error between the multiplcations
-    if norm(mult1 - mult2) < 1E-14
+    if norm(mult1 - mult2) < 1E-13
         # println("Multiplication difference: ", norm(mult1 - mult2))
         return H_mat, M_vec 
     else 
@@ -181,6 +182,7 @@ function lr_sweep_2site(H, M, h, cutoff)
     #Ensures orthogonalityu center is 1
     orthogonalize!(M, 1)
     N = length(M)
+    error = 0.0
     for i in 1:N - 1 
         # println("Site $i")
         #Creates the 2-site Hamiltonian matrix and converts the 2 site M block (M[i]*M[i + 1]) to a vector
@@ -192,19 +194,53 @@ function lr_sweep_2site(H, M, h, cutoff)
         #Evolves the M block forward with the effective Hamiltonian and convert back into a tensor
         M_evolve = exp(-im*H_mat_2*h)*M_vec
         M_evolve = ITensor(M_evolve, M_inds)
+        
+        
 
         #Performs SVD on the M block to get new left-orthogonal tensor
         if i == 1
-            U, S, V = svd(M_evolve, M_inds[1], cutoff = cutoff)
-            println("Singular Values: ", diag(Array(S, inds(S))))
+            if N > 2
+                bd = min(dim(M_inds[1]), dim(M_inds[2])*dim(M_inds[3]))
+
+                U, S, V = svd(M_evolve, M_inds[1])
+                S_diag = diag(Array(S, inds(S)))
+                U_trunc, S_trunc, V_trunc = svd(M_evolve, M_inds[1], cutoff = cutoff)
+                S_trunc_diag = diag(Array(S_trunc, inds(S_trunc)))
+                println("Singular Values: ", S_diag)
+                println(-1*sum(abs.(S_diag).^2 .* log.(S_diag.^2)))
+                # println("Max # of Singular Values: $bd ||| Removed Singular Values: ", setdiff(S_diag, S_trunc_diag))
+                error += sqrt(sum(setdiff(S_diag, S_trunc_diag).^2))
+            elseif N == 2 
+                bd = min(dim(M_inds[1]), dim(M_inds[2]))
+                U, S, V = svd(M_evolve, M_inds[1])
+                S_diag = diag(Array(S, inds(S)))
+                U_trunc, S_trunc, V_trunc = svd(M_evolve, M_inds[1], cutoff = cutoff)
+                S_trunc_diag = diag(Array(S_trunc, inds(S_trunc)))
+                println("Singular Values: ", S_diag)
+                println(-1*sum(abs.(S_diag).^2 .* log.(S_diag.^2)))
+                # println("Max # of Singular Values: $bd ||| Removed Singular Values: ", setdiff(S_diag, S_trunc_diag))
+                error += sqrt(sum(setdiff(S_diag, S_trunc_diag).^2))
+            end
         else
-            U, S, V = svd(M_evolve, M_inds[1:2], cutoff = cutoff)
-            println("Singular Values: ", diag(Array(S, inds(S))))
+            if i != N - 1
+                bd = min(dim(M_inds[1])*dim(M_inds[2]),dim(M_inds[3])*dim(M_inds[4]))
+            else 
+                bd = min(dim(M_inds[1])*dim(M_inds[2]),dim(M_inds[3]))
+            end
+            U, S, V = svd(M_evolve, M_inds[1:2])
+            S_diag = diag(Array(S, inds(S)))
+            U_trunc, S_trunc, V_trunc = svd(M_evolve, M_inds[1:2], cutoff = cutoff)
+            S_trunc_diag = diag(Array(S_trunc, inds(S_trunc)))
+            println("Singular Values: ", S_diag)
+            println(-1*sum(abs.(S_diag).^2 .* log.(S_diag.^2)))
+            # println("Max # of Singular Values: $bd ||| Removed Singular Values: ", setdiff(S_diag, S_trunc_diag))
+            error += sqrt(sum(setdiff(S_diag, S_trunc_diag).^2))
+            
         end
 
         #Set the i-th tensor in MPS to be U which is left-orthogonal
-        M[i] = U
-        M_n = S*V
+        M[i] = U_trunc
+        M_n = S_trunc*V_trunc
 
         #If we're not on the last M block then evolve the (S*V) tensor with the effective Hamiltonian
         if i != N - 1
@@ -218,11 +254,12 @@ function lr_sweep_2site(H, M, h, cutoff)
             M[i + 1] = M2_evolve
         elseif i == N - 1
             #If on last site no evolution takes places
-            M[i + 1] = S*V
+            M[i + 1] = S_trunc*V_trunc
         end
         
     end
-    return M
+    println("Error: ", error)
+    return M, error
 end
 
 function tdvp_constant(H, init, t0, T, steps)
@@ -235,7 +272,7 @@ function tdvp_constant(H, init, t0, T, steps)
     #Create array to store evolved state
     storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
     storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
-
+    
     #Run time stepper
     for i = 1:steps
         # println("Step: ", i)
@@ -257,16 +294,18 @@ function tdvp2_constant(H, init, t0, T, steps, cutoff)
     #Create arry to store evolved state
     storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
     storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
-
+    truncation_err = zeros(steps + 1)
+    truncation_err[1] = 0.0
     #Run time stepper
     for i = 1:steps
         # println("Step: ", i)
-        init = lr_sweep_2site(H, init, h, cutoff)
+        init, err = lr_sweep_2site(H, init, h, cutoff)
+        truncation_err[i + 1] = err
         println("Link Dimensions at step $i: ", linkdims(init))
         storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
 
     end
-    return init, storage_arr
+    return init, storage_arr, truncation_err
 end
 
 function tdvp_time(H, init, t0, T, steps)
@@ -305,7 +344,7 @@ function tdvp2_time(H, init, t0, T, steps, cutoff)
     #Run time stepper
     for i = 1:steps
         println("Step: ", i)
-        init = lr_sweep(H(i), init, h, cutoff)
+        init, _ = lr_sweep_2site(H(i), init, h, cutoff)
         storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
     end
     

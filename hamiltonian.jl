@@ -22,6 +22,7 @@ splus = sx + im.*sy
 sminus = sx - im.*sy
 a = [0 0; 0 1]
 
+
 function matrix_form(MPO::MPO, sites)
     N = length(MPO)
     Matrix_Form = zeros(ComplexF64, (2^N, 2^N))
@@ -90,12 +91,91 @@ function time_MPO(t, p, ground_freq, cross_kerr, dipole, N, sites)
 end
 
 #Same as above, exc ept the time dependent part is in terms of a vector instead of a function
-function time_MPO_param(step, pt0, qt0, ground_freq, cross_kerr, dipole, N, sites)
+function piecewise_H_MPO(step, pt0, qt0, ground_freq, cross_kerr, dipole, N, sites)
     os = OpSum() 
     for i = 1:N 
         os += ground_freq[N - i + 1], "a+a", i
         os += pt0[i,step], "Sx2", N - i + 1
         os += qt0[i,step], "-Sy2", N - i + 1
+        #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
+        if  i != N
+            for j = i + 1:N
+                #zz-coupling interactions
+                os -= cross_kerr[i,j], "a+a", i, "a+a", j 
+                #dipole-dipole interactions
+                os += dipole[i,j], "a+", i, "a", j 
+                os += dipole[i,j], "a", i, "a+", j
+            end
+        end
+    end
+    H = MPO(os, sites)
+    return H 
+end
+
+function piecewise_H_MPO_no_rot(step, f, ground_freq, cross_kerr, dipole, N, sites)
+    os = OpSum() 
+    for i = 1:N 
+        os += ground_freq[N - i + 1], "a+a", i
+        os += f[i,step], "Sx2", N - i + 1
+
+        #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
+        if  i != N
+            for j = i + 1:N
+                #zz-coupling interactions
+                os -= cross_kerr[i,j], "a+a", i, "a+a", j 
+                #dipole-dipole interactions
+                os += dipole[i,j], "a+", i, "a", j 
+                os += dipole[i,j], "a", i, "a+", j
+            end
+        end
+    end
+    H = MPO(os, sites)
+    return H 
+end
+
+function piecewise_H(step, f, ground_freq, cross_kerr, dipole, N)
+    H = zeros(ComplexF64, (2^N, 2^N))
+    for i = 1:N 
+        H .+= ground_freq[i]*s_op(a, i, N)
+        H .+= pt0[i, step]*s_op([0 1; 1 0], i, N)
+        H .+= im*qt0[i, step]*s_op([0 1; -1 0], i, N)
+        if i != N 
+            for j = i + 1: N 
+                #zz-coupling interaction
+                H .-= cross_kerr[i,j]*s_op(a, i, N)*s_op(a, j, N)
+                #dipole-dipole interaction
+                
+                H .+= dipole[i,j]*s_op([0 0; 1 0], i, N)*s_op([0 1; 0 0], j, N)
+                H .+= dipole[i,j]*s_op([0 1; 0 0], i, N)*s_op([0 0; 1 0], j, N)
+            end
+        end
+    end
+    return H 
+end
+
+function piecewise_H_no_rot(step, f, ground_freq, cross_kerr, dipole, N)
+    H = zeros(ComplexF64, (2^N, 2^N))
+    for i = 1:N 
+        H .+= ground_freq[i]*s_op(a, i, N)
+        H .+= f[i, step]*s_op([0 1; 1 0], i, N)
+        if i != N 
+            for j = i + 1: N 
+                #zz-coupling interaction
+                H .-= cross_kerr[i,j]*s_op(a, i, N)*s_op(a, j, N)
+                #dipole-dipole interaction
+                
+                H .+= dipole[i,j]*s_op([0 0; 1 0], i, N)*s_op([0 1; 0 0], j, N)
+                H .+= dipole[i,j]*s_op([0 1; 0 0], i, N)*s_op([0 0; 1 0], j, N)
+            end
+        end
+    end
+    return H 
+end
+
+function system_MPO(ground_freq, cross_kerr, dipole, N, sites)
+    os = OpSum() 
+    for i = 1:N 
+        os += ground_freq[N - i + 1], "a+a", i
         #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
         if  i != N
             for j = i + 1:N
@@ -124,6 +204,43 @@ function ising_mpo(N, sites)
     H = MPO(os,sites)
     return H
 end
+
+function downsample_pulse(pt, qt, nsplines, nsteps)
+    if length(pt) == nsteps & length(qt) == nsteps 
+        return pt, qt 
+    else
+        pt_n = zeros(size(pt)[1], nsteps)
+        qt_n = zeros(size(qt)[1], nsteps)
+        if nsteps % nsplines == 0
+            
+            for j in 1:size(pt)[1]
+                for i in 1:nsplines
+                    spline_len = Int64(nsteps/nsplines) 
+                    pt_n[j, (i - 1)*spline_len + 1:i*spline_len] .= pt[j, i]
+                    qt_n[j, (i - 1)*spline_len + 1:i*spline_len] .= qt[j, i]
+                end
+            end 
+            
+        elseif nsteps % nsplines != 0
+            println("Number of steps is not divisible by the number of splines") 
+            spline_len = Int64(floor(nsteps/nsplines))
+            spline_remainder = nsteps % nsplines
+            for j in 1:size(pt)[1]
+                for i in 1:nsplines
+                    if i == nsplines 
+                        pt_n[j, (i - 1)*spline_len + 1: i*spline_len + spline_remainder] .= pt[j, i]
+                        qt_n[j, (i - 1)*spline_len + 1: i*spline_len + spline_remainder] .= qt[j, i]
+                    else
+                        pt_n[j, (i - 1)*spline_len + 1:i*spline_len] .= pt[j, i]
+                        qt_n[j, (i - 1)*spline_len + 1:i*spline_len] .= qt[j, i]
+                    end
+                end 
+            end
+        end 
+    end
+    return pt_n, qt_n
+end
+
 
 #xxx hamiltonain model as MPO
 function xxx_mpo(N, sites, J, g)
