@@ -116,17 +116,17 @@ end
 
 
 let 
-    pts = 200
+    pts = 20
     max_dim = 8
     err_arr = zeros(max_dim, pts)
     # h = LinRange(1E-, 1E-0, pts)
-    h = LinRange(0, 3, pts)
+    h = LinRange(-5, 3, pts)
     h = 10 .^-h 
     h = reverse(h)
     println(h)
     init = zeros(ComplexF64,2^N)
-    init[1] = 1.0 + 0.0*im
-    # init = U[:,1]
+    # init[1] = 1.0 + 0.0*im
+    init = U[:,1]
     c = U\init 
     C_diag = diagm(c)
     CU = U*C_diag
@@ -174,7 +174,7 @@ let
     yticks = [1E-30, 1E-25, 1E-20, 1E-15, 1E-10, 1E-5])
     plot!(h, h.^2, linestyle =:dash, linewidth =:2, linecolor =:black, label = L"(\Delta t)^2")
     display(p1)
-    savefig("ErrorAllTo1.png")
+    # savefig("ErrorAllTo1.png")
 end
 
 # let

@@ -127,7 +127,10 @@ function lr_sweep(H, M, h)
     
     #Ensures orthogonality center is the first site
     orthogonalize!(M, 1)
-
+    # if return_projectors == true
+    #     P_L = []
+    #     P_R = []
+    # end
     N = length(M)
     for i in 1:N - 1 
         # println("Site: ", i)
@@ -261,6 +264,7 @@ function lr_sweep_2site(H, M, h, cutoff)
     println("Error: ", error)
     return M, error
 end
+
 
 function tdvp_constant(H, init, t0, T, steps)
     N = length(init)
