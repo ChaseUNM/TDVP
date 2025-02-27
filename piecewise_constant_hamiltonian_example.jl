@@ -31,7 +31,7 @@ splines = 2
 #Set initial condition to be [0 1 0 0]
 init = zeros(ComplexF64,2^N)
 init[1] = 1.0 + 0.0*im 
-M_init = MPS(init, sites, maxdim = 2)
+M_init = MPS(init, sites, maxdim = 1)
 
 pt0 = [1 2; 1.5 2.5]
 qt0 = [-1 -2; -1.5 -2.5]
@@ -93,9 +93,11 @@ let
         plots = plot(y1, y2)
         sol = plot(range(0, steps).*(T/steps), abs2.(storage_arr), xlabel = "t", ylabel = "Population", plot_title = "Matrix Exponentation Evolution",
         labels = ["|00>" "|01>" "|10>" "|11>"], reuse = false, dpi = 150)
-        savefig(y1, "PiecewiseConstantTDVP.png")
-        savefig(y2, "PiecewiseConstantTDVP2.png")
-        savefig(sol, "PiecewiseConstantEvolution.png")
+        display(y1)
+        # savefig(y1, "PiecewiseConstantTDVP.png")
+        # savefig(y2, "PiecewiseConstantTDVP2.png")
+        # savefig(sol, "PiecewiseConstantEvolution.png")
+        # display(sol)
     end
 end
 

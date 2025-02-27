@@ -124,10 +124,10 @@ function lr_sweep_test(H, M, h)
     return M, P_L, P_R
 end
 
-_, P_L, P_R = lr_sweep_test(H_MPO, M, delta_t)
+# _, P_L, P_R = lr_sweep_test(H_MPO, M, delta_t)
 
-let
-    for i in 1:length(P_L)
-        display(kron(P_L[i], P_R[i]))
-    end
-end
+# let
+#     for i in 1:length(P_L)
+#         display(kron(P_L[i], P_R[i]))
+#     end
+# end

@@ -120,12 +120,12 @@ let
     max_dim = 8
     err_arr = zeros(max_dim, pts)
     # h = LinRange(1E-, 1E-0, pts)
-    h = LinRange(-5, 3, pts)
+    h = LinRange(0, 3, pts)
     h = 10 .^-h 
     h = reverse(h)
     println(h)
     init = zeros(ComplexF64,2^N)
-    # init[1] = 1.0 + 0.0*im
+    init[1] = 1.0 + 0.0*im
     init = U[:,1]
     c = U\init 
     C_diag = diagm(c)
