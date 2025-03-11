@@ -270,11 +270,11 @@ function tdvp_constant(H, init, t0, T, steps)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
-
+    d = prod(dim(sites))
     #Get step size
     h = (T - t0)/steps
     #Create array to store evolved state
-    storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
+    storage_arr = zeros(ComplexF64, (steps + 1, d))
     storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
     
     #Run time stepper
@@ -292,42 +292,43 @@ function tdvp2_constant(H, init, t0, T, steps, cutoff)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
-    
+    d = prod(dim(sites))
     #Get step size
     h = (T - t0)/steps
     #Create arry to store evolved state
-    storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
-    storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
+    storage_arr = zeros(ComplexF64, (steps + 1, d))
+    storage_arr[1,:] = reconstruct_arr_v2(init)
     truncation_err = zeros(steps + 1)
     truncation_err[1] = 0.0
+    link_dim = []
     #Run time stepper
     for i = 1:steps
         # println("Step: ", i)
         init, err = lr_sweep_2site(H, init, h, cutoff)
         truncation_err[i + 1] = err
         println("Link Dimensions at step $i: ", linkdims(init))
-        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
-
+        storage_arr[i + 1,:] = reconstruct_arr_v2(init)
+        push!(link_dim, prod(linkdims(init)))
     end
-    return init, storage_arr, truncation_err
+    return init, storage_arr, truncation_err, link_dim
 end
 
 function tdvp_time(H, init, t0, T, steps)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
-
+    d = prod(dim(sites))
     #Get step size
     h = (T - t0)/steps
     #Create array to store evolved state
-    storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
-    storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
+    storage_arr = zeros(ComplexF64, (steps + 1, d))
+    storage_arr[1,:] = reconstruct_arr_v2(init)
 
     #Run time stepper
     for i = 1:steps
         println("Step: ", i)
         init = lr_sweep(H(i), init, h)
-        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
+        storage_arr[i + 1,:] = reconstruct_arr_v2(init)
     end
     
     #Return evolved MPS, as well as state data at each time step
@@ -338,20 +339,24 @@ function tdvp2_time(H, init, t0, T, steps, cutoff)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
-
+    d = prod(dim(sites))
     #Get step size
     h = (T - t0)/steps
     #Create array to store evolved state
-    storage_arr = zeros(ComplexF64, (steps + 1, Int64(2^N)))
-    storage_arr[1,:] = reconstruct_arr(2, N, init, sites)
-
+    storage_arr = zeros(ComplexF64, (steps + 1, d))
+    storage_arr[1,:] = reconstruct_arr_v2(init)
+    bond_dim_list = []
+    push!(bond_dim_list, prod(linkdims(init)))
     #Run time stepper
     for i = 1:steps
         println("Step: ", i)
         init, _ = lr_sweep_2site(H(i), init, h, cutoff)
-        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
+        println("Linkdim: ", linkdims(init))
+        storage_arr[i + 1,:] = reconstruct_arr_v2(init)
+        # storage_arr[i + 1,:] = zeros(ComplexF64, d)
+        push!(bond_dim_list, prod(linkdims(init)))
+        
     end
-    
     #Return evolved MPS, as well as state data at each time step
-    return init, storage_arr
+    return init, storage_arr, bond_dim_list
 end

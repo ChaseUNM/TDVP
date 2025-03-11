@@ -13,11 +13,11 @@ freq_01 = [1, 2]
 freq_01 .*= 1 
 
 cross_kerr = [0 0 ; 0 0]
-Jkl = [0 0.5; 0 0]
+Jkl = [0 0; 0 0]
 Jkl .*= 1 
 
 
-T = 2.0
+T = 10.0
 t0 = 0.0
 steps = 100
 splines = 2

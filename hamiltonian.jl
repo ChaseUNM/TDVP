@@ -4,7 +4,9 @@ using SparseArrays
 
 include("vectorization.jl")
 
-#Create different operators for use in ITensor opsum operation
+
+
+# Create different operators for use in ITensor opsum operation
 ITensors.op(::OpName"Sx2", ::SiteType"Qubit") = [0 1; 1 0]
 ITensors.op(::OpName"Sy2", ::SiteType"Qubit") = [0 -im; im 0]
 ITensors.op(::OpName"Sz2", ::SiteType"Qubit") = [1 0; 0 -1]
@@ -22,17 +24,28 @@ splus = sx + im.*sy
 sminus = sx - im.*sy
 a = [0 0; 0 1]
 
+# a = Array(Bidiagonal(zeros(d), sqrt.(collect(1: d - 1)), :U))
+# ITensors.op(::OpName"a", ::SiteType"Qudit") = a
+# ITensors.op(::OpName"adag", ::SiteType"Qudit") = a'
+# ITensors.op(::OpName"a'a'", ::SiteType"Qudit") = a'*a'
+# ITensors.op(::OpName"aa", ::SiteType"Qudit") = a*a
+# ITensors.op(::OpName"a'a", ::SiteType"Qudit") = a'*a 
+# ITensors.op(::OpName"a+a'", ::SiteType"Qudit") = a + a'
+# ITensors.op(::OpName"a-a'", ::SiteType"Qudit") = a - a'
 
 function matrix_form(MPO::MPO, sites)
     N = length(MPO)
-    Matrix_Form = zeros(ComplexF64, (2^N, 2^N))
-    for i = 1:2^N
-        vec = zeros(2^N)
+    d = dim(sites[1])
+    Matrix_Form = zeros(ComplexF64, (d^N, d^N))
+    println(size(Matrix_Form))
+    for i = 1:d^N
+        vec = zeros(d^N)
         vec[i] = 1.0
         vec_mps = MPS(vec, sites)
         mpo_col = MPO*vec_mps
         sites2 = siteinds(mpo_col)
-        mpo_col = reconstruct_arr(2, N, mpo_col, sites2)
+        # mpo_col = reconstruct_arr(d, N, mpo_col, sites2)
+        mpo_col = reconstruct_arr_v2(mpo_col)
         Matrix_Form[:,i] = mpo_col
     end
     return Matrix_Form
@@ -49,6 +62,20 @@ function s_op(op, j, N)
     else 
         I1 = Matrix(I, 2^(j - 1), 2^(j - 1))
         I2 = Matrix(I, 2^(N - j), 2^(N - j))
+        return kron(I1, op, I2)
+    end
+end
+
+function s_op_general(op, j, N, d)
+    if j == 1 || j == N + 1
+        Ident = Matrix(I, d^(N - 1), d^(N - 1))
+        return kron(op, Ident)
+    elseif j == N
+        Ident = Matrix(I, d^(j - 1), d^(j - 1))
+        return kron(Ident, op)
+    else 
+        I1 = Matrix(I, d^(j - 1), d^(j - 1))
+        I2 = Matrix(I, d^(N - j), d^(N - j))
         return kron(I1, op, I2)
     end
 end
@@ -112,7 +139,59 @@ function piecewise_H_MPO(step, pt0, qt0, ground_freq, cross_kerr, dipole, N, sit
     return H 
 end
 
-function piecewise_H_MPO_no_rot(step, f, ground_freq, cross_kerr, dipole, N, sites)
+function piecewise_H_MPO(step, pt0, qt0, ground_freq, rot_freq, cross_kerr, dipole, N, sites)
+    os = OpSum() 
+    for i = 1:N
+        
+        freq = ground_freq[N - i + 1] - rot_freq[N - i + 1]
+        os += freq, "a'a", i
+        os -= 0.5*self_kerr[N - i + 1], "a'a'", i, "aa", i
+
+        #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
+        if  i != N
+            for j = i + 1:N
+                #zz-coupling interactions
+                os -= cross_kerr[i,j], "a'a", i, "a'a", j 
+                #dipole-dipole interactions
+                os += dipole[i,j], "adag", i, "a", j 
+                os += dipole[i,j], "a", i, "adag", j
+            end
+        end
+        os += pt0[N - i + 1,step], "a + a'", i
+        os += im*qt0[N - i + 1,step], "a - a'", i
+    end
+    H = MPO(os, sites)
+    return H 
+end
+
+function piecewise_H_MPO_v2(step, pt0, qt0, ground_freq, rot_freq, cross_kerr, dipole, N, sites)
+    os = OpSum() 
+    for i = 1:N
+        
+        freq = ground_freq[N - i + 1] - rot_freq[N - i + 1]
+        os += freq, "adag", i, "a", i
+        os -= 0.5*self_kerr[N - i + 1], "adag", i, "adag", i, "a", i, "a", i
+
+        #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
+        if  i != N
+            for j = i + 1:N
+                #zz-coupling interactions
+                os -= cross_kerr[i,j], "adag", i, "a", i, "adag", j, "a", j 
+                #dipole-dipole interactions
+                os += dipole[i,j], "adag", i, "a", j 
+                os += dipole[i,j], "a", i, "adag", j
+            end
+        end
+        os += pt0[N - i + 1,step], "a", i
+        os += pt0[N - i + 1,step], "adag", i
+        os += im*qt0[N - i + 1,step], "a", i 
+        os -= im*qt0[N - i + 1,step], "adag", i
+    end
+    H = MPO(os, sites)
+    return H 
+end
+
+function piecewise_H_MPO_no_rot(step, pt, qt, ground_freq, cross_kerr, dipole, N, sites)
     os = OpSum() 
     for i = 1:N 
         os += ground_freq[N - i + 1], "a+a", i
@@ -171,6 +250,36 @@ function piecewise_H_no_rot(step, f, ground_freq, cross_kerr, dipole, N)
     end
     return H 
 end
+
+function H_sys(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, d)
+    H = zeros(ComplexF64, (d^N, d^N))
+    a = Array(Bidiagonal(zeros(d), sqrt.(collect(1: d - 1)), :U))
+    for i = 1:N 
+        H .+= (ground_freq[i] - rot_freq[i])*s_op_general(a'*a, i, N, d)
+        H .-= 0.5*self_kerr[i]*s_op_general(a'*a'*a*a, i, N, d)
+        if i != N 
+            for j = i + 1: N
+                #zz-coupling interaction
+                H .-= cross_kerr[i,j]*s_op_general(a'*a, i, N, d)*s_op_general(a'*a, j, N, d)
+                #dipole-dipole interaction
+                H .+= dipole[i,j]*s_op_general(a', i, N, d)*s_op_general(a, j, N, d)
+                H .+= dipole[i,j]*s_op_general(a, i, N, d)*s_op_general(a', j, N, d)
+            end
+        end
+    end
+    return H 
+end
+
+function H_ctrl(step, p, q, N, d)
+    H = zeros(ComplexF64, (d^N, d^N))
+    a = Array(Bidiagonal(zeros(d), sqrt.(collect(1: d - 1)), :U))
+    for i = 1:N 
+        H .+= p[i,step]*s_op_general(a + a', i, N, d)
+        H .+= im*q[i, step]*s_op_general(a - a', i, N, d)
+    end
+    return H 
+end
+
 
 function system_MPO(ground_freq, cross_kerr, dipole, N, sites)
     os = OpSum() 
