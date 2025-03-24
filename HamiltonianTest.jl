@@ -13,7 +13,7 @@ sites = siteinds("Qudit", N, dim = d)
 ground_freq = [4.80595, 4.8601]*(2*pi)
 rot_freq = sum(ground_freq)/N*ones(N)
 dipole = [0 0.005; 0 0]*(2*pi)
-self_kerr = [0.2, 0.2]*(2*pi)
+self_kerr = [0.2, 0.2]*(2*pi)*0
 cross_kerr = zeros(2, 2)
 
 H_s = H_sys(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, d)
@@ -25,6 +25,27 @@ end
 pt = npzread("pt_guard_2.npy")
 qt = npzread("qt_guard_2.npy")
 
+pcof = npzread("pcof_no_guard.npy")
+function construct_pulse(pcof, N) 
+    num_par = length(pcof)
+    par_per_system = Int64(num_par/(2*N))
+    
+    pt = zeros(N, par_per_system)
+    qt = zeros(N, par_per_system)
+    pt[1,:] = pcof[1:par_per_system]
+    pt[2,:] = pcof[2*par_per_system + 1:3*par_per_system]
+    qt[1,:] = pcof[par_per_system + 1:2*par_per_system]
+    qt[2,:] = pcof[3*par_per_system + 1:4*par_per_system]
+    pt = pt
+    qt = qt
+    return pt, qt 
+end
+pcof_re, pcof_im = construct_pulse(pcof, N) 
+splines = size(pcof_re)[2]
+println(pt_correct_unit*(500/pi))
+println(qt_correct_unit*(500/pi))
+
+
 pt_q1 = pt[1,:]
 pt_q2 = pt[2,:]
 qt_q1 = qt[1,:]
@@ -32,12 +53,14 @@ qt_q2 = qt[2,:]
 
 pt_correct_unit = pt.*(pi/500)
 qt_correct_unit = qt.*(pi/500)
+splines = Int64(unique(pt_correct_unit)/2)
+pts = size(pt_correct_unit)[2]
+step_size_list = [(count(==(i), qt_correct_unit[1,:])*200/pts) for i in unique(qt_correct_unit[1,:])]
 
-println(size(pt))
 
 t0 = 0
-T = 300.0
-steps = 54132
+T = 200.0
+steps = splines
 step_size = (T - t0)/steps
 
 
@@ -106,7 +129,7 @@ function plot_pop(loc)
         println("Step $i")
         H_c = H_ctrl(i, pt_correct_unit, qt_correct_unit, N, d)
         H_tot = H_s + H_c
-        init = exp(-im*H_tot*step_size)*init 
+        init = exp(-im*H_tot*step_size_list[i])*init 
         storage_arr[:,i + 1] = init
         error[:,i + 1] = abs2.(population[i + 1,:]) - abs2.(init)
         # println(population[i + 1,:] - init)
@@ -116,7 +139,7 @@ function plot_pop(loc)
 
 
     println(error[:,end])
-    error_p = plot(range(0, steps)*(T - t0)/steps, [abs.(error[1,:]) abs.(error[2,:]) abs.(error[5,:]) abs.(error[6,:])], legend =:top, legend_column = 16, legendfontsize = 8, 
+    error_p = plot(range(0, steps)*(T - t0)/steps, [abs.(error[1,:]) abs.(error[2,:]) abs.(error[3,:]) abs.(error[4,:])], legend =:top, legend_column = 16, legendfontsize = 8, 
     dpi = 200, legend_background_color=RGBA(1, 1, 1, 0.8), titlefont=font(10),
     labels = [L"|00\rangle" L"|01\rangle" L"|10\rangle" L"|11\rangle"], 
     ylabel = "Population Error", xlabel = "t", titlepad = -10)
@@ -128,7 +151,7 @@ function plot_pop(loc)
     ylabel = "Population", xlabel = "t", titlepad = -10)
     # bd_plot = plot(range(0, steps)*(T - t0)/steps, bd, ylabel = "Bond Dimension", xlabel = "t")
     # display(error_p)
-    return error_p
+    return p
 end
 
 
@@ -148,7 +171,7 @@ let
     plt = plot(p1, p2, p3, p4, layout = (2,2), dpi = 250, size = (800, 600))
     # bd_plot = plot(bd1, bd2, bd3, bd4, layout = (2, 2), dpi = 250, size = (800,600))
     display(plt)
-    savefig(plt, "2GuardTDVPError.png")
+    # savefig(plt, "2GuardTDVPError.png")
     # savefig(bd_plot, "BD_TDVP2_2Guard1E-15.png")
 end
 #OpSum Testing

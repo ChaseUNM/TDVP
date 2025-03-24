@@ -170,6 +170,7 @@ function piecewise_H_MPO_v2(step, pt0, qt0, ground_freq, rot_freq, cross_kerr, d
         
         freq = ground_freq[N - i + 1] - rot_freq[N - i + 1]
         os += freq, "adag", i, "a", i
+        println("Self-kerr: ", self_kerr[N - i + 1])
         os -= 0.5*self_kerr[N - i + 1], "adag", i, "adag", i, "a", i, "a", i
 
         #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
@@ -186,6 +187,29 @@ function piecewise_H_MPO_v2(step, pt0, qt0, ground_freq, rot_freq, cross_kerr, d
         os += pt0[N - i + 1,step], "adag", i
         os += im*qt0[N - i + 1,step], "a", i 
         os -= im*qt0[N - i + 1,step], "adag", i
+    end
+    H = MPO(os, sites)
+    return H 
+end
+
+function H_MPO_v2(ground_freq, rot_freq, cross_kerr, dipole, N, sites)
+    os = OpSum() 
+    for i = 1:N
+        
+        freq = ground_freq[i] - rot_freq[i]
+        os += freq, "adag", i, "a", i
+        os -= 0.5*self_kerr[N - i + 1], "adag", i, "adag", i, "a", i, "a", i
+
+        #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
+        if  i != N
+            for j = i + 1:N
+                #zz-coupling interactions
+                os -= cross_kerr[i,j], "adag", i, "a", i, "adag", j, "a", j 
+                #dipole-dipole interactions
+                os += dipole[i,j], "adag", i, "a", j 
+                os += dipole[i,j], "a", i, "adag", j
+            end
+        end
     end
     H = MPO(os, sites)
     return H 
