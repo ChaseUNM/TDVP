@@ -38,6 +38,7 @@ end
 
 function reconstruct_arr_v2(psi)
     M = psi[1]
+    N = length(psi)
     for i = 2:N 
         M *= psi[i]
     end

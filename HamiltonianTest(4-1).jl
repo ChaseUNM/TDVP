@@ -4,15 +4,15 @@ using Plots.PlotMeasures
 gr()
 include("hamiltonian.jl")
 include("tdvp.jl")
-N = 2
-d = 4
+N = 3
+d = 3
 sites = siteinds("Qudit", N, dim = d)
 
-ground_freq = [4.80595, 4.8601]*(2*pi)
+ground_freq = [4.80595, 4.8601, 5.12]*(2*pi)
 rot_freq = sum(ground_freq)/N*ones(N)
-dipole = [0 0.005; 0 0]*(2*pi)
-self_kerr = [0.2, 0.2]*(2*pi)
-cross_kerr = zeros(2, 2)
+dipole = [0 0.005 0; 0 0 0.005; 0 0 0]*(2*pi)
+self_kerr = [0.2, 0.2, 0.2]*(2*pi)
+cross_kerr = zeros(3, 3)
 
 H_s = H_sys(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, d)
 
@@ -20,8 +20,13 @@ function H_t_MPO(t)
     return piecewise_H_MPO_v2(t, pt_correct_unit, qt_correct_unit, ground_freq, rot_freq, cross_kerr, dipole, N, sites)
 end
 
-pt = npzread("pt_guard_2_spline150.npy")
-qt = npzread("qt_guard_2_spline150.npy")
+function H_t_MPO_backwards(t)
+    return piecewise_H_MPO_v2(t, reverse(pt_correct_unit, dims = 2), reverse(qt_correct_unit, dims = 2), ground_freq, rot_freq, cross_kerr, dipole, N, sites)
+end
+
+
+pt = npzread("3Qubit_spline100_pt.npy")
+qt = npzread("3Qubit_spline100_qt.npy")
 
 pcof = npzread("pcof_no_guard.npy")
 function construct_pulse(pcof, N) 
@@ -38,8 +43,8 @@ function construct_pulse(pcof, N)
     qt = qt
     return pt, qt 
 end
-pcof_re, pcof_im = construct_pulse(pcof, N) 
-splines = size(pcof_re)[2]
+# pcof_re, pcof_im = construct_pulse(pcof, N) 
+splines = 100
 
 t0 = 0
 T = 300.0
@@ -48,7 +53,7 @@ T = 300.0
 
 pt_correct_unit = pt.*(pi/500)
 qt_correct_unit = qt.*(pi/500)
-splines = Int64(length(unique(pt_correct_unit))/2)
+splines = Int64(length(unique(pt_correct_unit))/N)
 steps = splines
 step_size = (T - t0)/steps
 pts = size(pt_correct_unit)[2]
@@ -61,13 +66,13 @@ let
     pulse1 = plot(range(0, (pts-1))*T/(pts-1), [pt[1,:] qt[1,:]], ylabel = "MHz", xlabel = "t", labels = ["p(t)" "q(t)"], title = "Qubit 1", dpi = 150)
     pulse2 = plot(range(0, (pts-1))*T/(pts-1), [pt[2,:] qt[2,:]], ylabel = "MHz", xlabel = "t", labels = ["p(t)" "q(t)"], title = "Qubit 2", dpi = 150)
     pulses_plot = plot(pulse1, pulse2, layout = (2, 1))
-    display(pulses_plot)
+    # display(pulses_plot)
     # savefig(pulses_plot, "Pulses_plot.png")
 end
 
 function smallerize(M)
     row, col = size(M)
-    new_col = Int64(length(unique(pt_correct_unit))/2)
+    new_col = Int64(length(unique(pt_correct_unit))/N)
     M_n = zeros(row, new_col)
     for i = 1:row
         M_n[i,:] = [(i) for i in unique(M[i,:])]
@@ -78,10 +83,50 @@ end
 pt_correct_unit = smallerize(pt_correct_unit)
 qt_correct_unit = smallerize(qt_correct_unit)
 
+#Evolve forward and backwards
+init = zeros(ComplexF64, d^N)
+cutoff = 1E-15
+init[6] = 1.0 + 0.0*im
+M_init = MPS(init, sites, maxdim = 1)
+M_n, _, bd_f = tdvp2_time(H_t_MPO, M_init, t0, T, steps, cutoff, step_size_list)
+M0, _, bd_b = tdvp2_time(H_t_MPO_backwards, M_n, t0, T, steps, cutoff, -(step_size_list))
+
+init_abs2 = abs2.(reconstruct_arr_v2(M_init))
+M_n_abs2 = abs2.(reconstruct_arr_v2(M_n))
+M0_abs2 = abs2.(reconstruct_arr_v2(M0))
+display(norm(init_abs2 - M0_abs2))
+# display(plot([bd_f, reverse(bd_b), abs.(bd_f - reverse(bd_b))], labels = ["Bond forward" "Bond backward" "Symmetric Test"]))
+function bd_plot_forwardbackward(cutoff_list)
+    init_list = [1, 2, 5, 6]
+    for j in init_list
+        bit_string = lpad(string(j - 1, base = 4), 2, '0')
+        init = zeros(ComplexF64, d^N)
+        init[j] = 1.0 + 0.0*im
+        M_init = MPS(init, sites, maxdim = 1)
+        bd_plot = plot(layout = (2,2), dpi = 200)    
+        for i in 1:length(cutoff_list)
+            
+            M_n,_,bd_f = tdvp2_time(H_t_MPO, M_init, t0, T, steps, cutoff_list[i], step_size_list)
+            M0, _, bd_b = tdvp2_time(H_t_MPO_backwards, M_n, t0, T, steps, cutoff_list[i], -(reverse(step_size_list)))
+            err = norm(abs2.(reconstruct_arr_v2(M0)) - abs2.(reconstruct_arr_v2(M_init)))
+            err = round(err, digits = 15)
+            plot!(bd_plot[i], [bd_f, reverse(bd_b), abs.(bd_f - reverse(bd_b))], labels = ["Bond forward" "Bond backward" "Symmetric Test"], 
+            title = "SVD Cutoff: $(cutoff_list[i]), Err: $err", titlefontsize = 6)
+        end 
+    plot!(bd_plot, plot_title = "Initial Condition: |$bit_string>", titlefontsize = 7)
+    plot!(bd_plot, legendfontsize = 4, legend_background_color=RGBA(1, 1, 1, 0.6), legend=:topleft, xlabel = "Step", ylabel = "Bond Dimension") 
+    display(bd_plot)
+    # savefig(bd_plot, "bd_plot|$bit_string>")
+    end
+end 
+# bd_plot_forwardbackward([1E-15, 1E-10, 1E-5, 1E-3])
+
+
+
 
 function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     init = zeros(ComplexF64, d^N)
-    bit_string = lpad(string(loc - 1, base = 4), 2, '0')
+    bit_string = lpad(string(loc - 1, base = d), N, '0')
     init[loc] = 1.0 + 0.0*im
     U_g = Matrix(1.0*I, d^N, d^N)
     U_g[5:6, 5:6] = zeros(2, 2)
@@ -112,8 +157,10 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
 
     error[:,1] = population[1,:] - storage_arr[:,1]
     
-    for i = 1:steps 
-        println("Step $i")
+    for i = 1:steps
+        if verbose == true 
+            println("Step $i")
+        end
         H_c = H_ctrl(i, pt_correct_unit, qt_correct_unit, N, d)
         H_tot = H_s + H_c
         init = exp(-im*H_tot*step_size_list[i])*init 
@@ -209,42 +256,63 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     # savefig(bd_plot, "BD_TDVP2_2Guard5E-3.png")
 end
 
-# all_plots(1, 2)
+# all_plots(2, 0.0)
 
 function bond_plots(cutoff_list, TDVP = 2)
     
     V = Matrix(1.0*I, d^N, 2^N)
-    V[3:4, 3:4] .= 0
-    V[6,3] = 1.0
-    V[5,4] = 1.0
-    i_l = [1, 2, 5, 6]
-    bd_plot = plot(layout = (2,2), dpi = 200)
+    V[3:8, 3:8] .= 0
+    V[14,7] = 1.0
+    V[13,8] = 1.0
+    V[11, 6] = 1.0
+    V[10, 5] = 1.0
+    V[5, 4] = 1.0
+    V[4, 3] =1.0
+    i_l = [1, 2, 4, 5, 10, 11, 13, 14]
+    display(V'*V)
+    bd_plot = plot(layout = (4,2), dpi = 400)
     linestyles = [:solid, :dash, :dot, :dashdot, :solid]
     for i in 1:length(cutoff_list)
+        fidelity = 0.0
         UT = zeros(ComplexF64, d^N, 2^N)
         for j = 1:length(i_l) 
-            _, e, _ = plot_pop(i_l[j], 1, cutoff_list[i])
-            UT[:,j] = e
+            _, e, _ = plot_pop(i_l[j], TDVP, cutoff_list[i])
+            UT[:,j] = (e)
+            display(abs2.(e))
+            display(abs2(e[i_l[j]]))
+            println(V[j,j])
+            fidelity += V[:,j]'*e    
         end
-        
-        gate_fidelity = 1/d^N*(abs.(tr(UT'*V))^N)
-        println("Gate Fidelity: ", gate_fidelity)
+        fidelity = abs(1/length(i_l)*fidelity)^2
+        println("Fidelity: ", fidelity)
+        println(size(abs.(UT'*V)))
+        display(abs.(UT'*V))
+        println(abs.(tr(UT'*V)))
+        gate_fidelity = (1/2^N)*(abs.(tr(UT'*V)))
+        println("Gate Fidelity: ", fidelity)
         display(UT)
-        _,_,b1 = plot_pop(1, TDVP, cutoff_list[i], true)
-        _,_,b2 = plot_pop(2, TDVP, cutoff_list[i], true)
-        _,_,b3 = plot_pop(5, TDVP, cutoff_list[i], true)
-        _,_,b4 = plot_pop(6, TDVP, cutoff_list[i], true)
-
-        plot!(bd_plot[1], times_list, b1, xlabel = "t", ylabel = "Bond Dimension", label = "Bond Dimension: $(cutoff_list[i]) | Gate Fidelity: $gate_fidelity", linestyle=linestyles[i])
-        plot!(bd_plot[2], times_list, b2, label = "Bond Dimension: $(cutoff_list[i])", linestyle=linestyles[i])
-        plot!(bd_plot[3], times_list, b3, label = "Bond Dimension: $(cutoff_list[i])", linestyle=linestyles[i])
-        plot!(bd_plot[4], times_list, b4, label = "Bond Dimension: $(cutoff_list[i])", linestyle=linestyles[i])
+        _,_,b1 = plot_pop(1, TDVP, cutoff_list[i])
+        _,_,b2 = plot_pop(2, TDVP, cutoff_list[i])
+        _,_,b3 = plot_pop(4, TDVP, cutoff_list[i])
+        _,_,b4 = plot_pop(5, TDVP, cutoff_list[i])
+        _,_,b5 = plot_pop(10, TDVP, cutoff_list[i])
+        _,_,b6 = plot_pop(11, TDVP, cutoff_list[i])
+        _,_,b7 = plot_pop(13, TDVP, cutoff_list[i])
+        _,_,b8 = plot_pop(14, TDVP, cutoff_list[i])
+        plot!(bd_plot[1], times_list, b1, xlabel = "t", ylabel = "Bond Dimension", label = "SVD Cutoff: $(cutoff_list[i]) | Gate Fidelity: $fidelity", linestyle=linestyles[i])
+        plot!(bd_plot[2], times_list, b2, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[3], times_list, b3, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[4], times_list, b4, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[5], times_list, b5, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[6], times_list, b6, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[7], times_list, b7, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[8], times_list, b8, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
     end
-    plot!(bd_plot, legendfontsize = 4, legend_background_color=RGBA(1, 1, 1, 0.6), legend=:topleft) 
+    plot!(bd_plot, legendfontsize = 3, legend_background_color=RGBA(1, 1, 1, 0.6), legend=:topleft) 
     display(bd_plot)
-    savefig(bd_plot, "bd_plot_TDVP1.png")
+    savefig(bd_plot, "3Q_bd_plot_TDVP2.png")
 end
 
-# bond_plots([4, 3, 2, 1], 1)
+bond_plots([1E-14, 1E-10, 1E-5, 1E-4, 1E-3], 2)
 
 #OpSum Testing

@@ -182,6 +182,26 @@ function lr_sweep(H, M, h)
     return M 
 end
 
+# function rl_sweep(H, M, h)
+#     N = length(M)
+#     if orthoCenter(N) != N 
+#         orthogonalize!(M, N)
+#     end 
+
+#     for i = N:-1:1
+#         H_eff = effective_Hamiltonian(H, M, i)
+#         H_mat, M_vec = conversion(H_eff, M[i])
+
+#         M_evolve = exp(-im*H_mat*h)*M_vec 
+
+#         M_inds = inds(M[i])
+#         M_evolve = ITensor(M_evolve, M_inds)
+
+#         if i == N 
+#             Q, R = 
+#         else
+#             Q, R =
+
 #Performs a single left-to-right sweep of an MPS using the 2 site tdvp, evolving forward one time step.
 function lr_sweep_2site(H, M, h, cutoff, verbose)
     
@@ -277,61 +297,148 @@ function lr_sweep_2site(H, M, h, cutoff, verbose)
     return M, error
 end
 
+function rl_sweep_2site(H, M, h, cutoff, verbose)
+    N = length(M)
+    
+    # orthogonalize!(M, N)
+    error = 0.0
+
+    for i in N-1:-1:1
+
+        H_eff_2 = effective_Hamiltonian_2site(H, M, i)
+        M_block = M[i]*M[i + 1]
+        H_mat_2, M_vec = conversion(H_eff_2, M_block)
+        M_inds = inds(M_block)
+
+        #Evolve the M block forward with the effective Hamiltonian and convert back into a tensor 
+        M_evolve = exp(-im*H_mat_2*h)*M_vec 
+        M_evolve = ITensor(M_evolve, M_inds)
+
+        #Perform SVD on the M block to get new right-orthogonal tensor 
+        if i == 1
+            if N > 2
+                bd = min(dim(M_inds[1]), dim(M_inds[2])*dim(M_inds[3]))
+
+                U, S, V = svd(M_evolve, M_inds[1])
+                S_diag = diag(Array(S, inds(S)))
+                U_trunc, S_trunc, V_trunc = svd(M_evolve, M_inds[1], cutoff = cutoff)
+                S_trunc_diag = diag(Array(S_trunc, inds(S_trunc)))
+                if verbose == true
+                    println("Singular Values: ", S_diag)
+                    println(-1*sum(abs.(S_diag).^2 .* log.(S_diag.^2)))
+                end
+                # println("Max # of Singular Values: $bd ||| Removed Singular Values: ", setdiff(S_diag, S_trunc_diag))
+                error += sqrt(sum(setdiff(S_diag, S_trunc_diag).^2))
+            elseif N == 2 
+                bd = min(dim(M_inds[1]), dim(M_inds[2]))
+                U, S, V = svd(M_evolve, M_inds[1])
+                S_diag = diag(Array(S, inds(S)))
+                U_trunc, S_trunc, V_trunc = svd(M_evolve, M_inds[1], cutoff = cutoff)
+                S_trunc_diag = diag(Array(S_trunc, inds(S_trunc)))
+                if verbose == true
+                    println("Singular Values: ", S_diag)
+                    println(-1*sum(abs.(S_diag).^2 .* log.(S_diag.^2)))
+                end
+                # println("Max # of Singular Values: $bd ||| Removed Singular Values: ", setdiff(S_diag, S_trunc_diag))
+                error += sqrt(sum(setdiff(S_diag, S_trunc_diag).^2))
+            end
+        else
+            if i != N - 1
+                bd = min(dim(M_inds[1])*dim(M_inds[2]),dim(M_inds[3])*dim(M_inds[4]))
+            else 
+                bd = min(dim(M_inds[1])*dim(M_inds[2]),dim(M_inds[3]))
+            end
+            U, S, V = svd(M_evolve, M_inds[1:2])
+            S_diag = diag(Array(S, inds(S)))
+            U_trunc, S_trunc, V_trunc = svd(M_evolve, M_inds[1:2], cutoff = cutoff)
+            S_trunc_diag = diag(Array(S_trunc, inds(S_trunc)))
+            if verbose == true
+                println("Singular Values: ", S_diag)
+                println(-1*sum(abs.(S_diag).^2 .* log.(S_diag.^2)))
+            end
+            # println("Max # of Singular Values: $bd ||| Removed Singular Values: ", setdiff(S_diag, S_trunc_diag))
+            error += sqrt(sum(setdiff(S_diag, S_trunc_diag).^2))
+            
+        end
+
+        #Set the (i + 1) tensor in MPS to be V which is right-orthogonal
+        M[i + 1] = V_trunc
+        M_n = U_trunc*S_trunc
+
+        #If we're not on the last M block then evolve the (U_trunc*S_trunc) tensor with effective Hamiltonian
+        if i != 1
+            M_n_inds = inds(M_n)
+            H_eff = effective_Hamiltonian(H, M, i)
+            H_mat, M2_vec = conversion(H_eff, M_n)
+
+            M2_evolve = exp(im*H_mat*h)*M2_vec 
+            M2_evolve = ITensor(M2_evolve, M_n_inds)
+            #Set next tensor to evolved (U*S) tensor 
+            M[i] = M2_evolve 
+        elseif i == 1
+            M[i] = U_trunc*S_trunc 
+        end
+    end
+
+    if verbose == true 
+        println("Error: ", error)
+    end 
+    return M, error
+
+end
+
 
 function tdvp_constant(H, init, t0, T, steps, verbose = false)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
-    init_copy = copy(init)
     d = prod(dim(sites))
     #Get step size
     h = (T - t0)/steps
     #Create array to store evolved state
     storage_arr = zeros(ComplexF64, (steps + 1, d))
-    storage_arr[1,:] = reconstruct_arr_v2(init_copy)
+    storage_arr[1,:] = reconstruct_arr(2, N, init, sites, verbose)
     
     #Run time stepper
     for i = 1:steps
         if verbose == true
             println("Step: ", i)
         end
-        init_copy = lr_sweep(H, init_copy, h)
-        storage_arr[i + 1,:] = reconstruct_arr_v2(init_copy)
+        init = lr_sweep(H, init, h)
+        storage_arr[i + 1,:] = reconstruct_arr(2, N, init, sites)
     end
     
     #Return evolved MPS, as well as state data at each time step
-    return init_copy, storage_arr
+    return init, storage_arr
 end
 
 function tdvp2_constant(H, init, t0, T, steps, cutoff, verbose = false)
     N = length(init)
     orthogonalize!(init, 1)
     sites = siteinds(init)
-    init_copy = copy(init)
     d = prod(dim(sites))
     #Get step size
     h = (T - t0)/steps
     #Create arry to store evolved state
     storage_arr = zeros(ComplexF64, (steps + 1, d))
-    storage_arr[1,:] = reconstruct_arr_v2(init_copy)
+    storage_arr[1,:] = reconstruct_arr_v2(init)
     truncation_err = zeros(steps + 1)
     truncation_err[1] = 0.0
     link_dim = []
     #Run time stepper
     for i = 1:steps
-        println("Step $i")
-        init_copy, err = lr_sweep_2site(H, init_copy, h, cutoff, verbose)
-        println(length(init_copy))
+        init, err = lr_sweep_2site(H, init, h/2, cutoff, verbose)
+        init, err = rl_sweep_2site(H, init, h/2, cutoff, verbose)
         truncation_err[i + 1] = err
         if verbose == true
             println("Step: ", i)
-            println("Link Dimensions at step $i: ", linkdims(init_copy))
+            println("Link Dimensions at step $i: ", linkdims(init))
         end
-        display(reconstruct_arr_v2(init_copy))
-        storage_arr[i + 1,:] = reconstruct_arr_v2(init_copy)
-        push!(link_dim, prod(linkdims(init_copy)))
+        
+        storage_arr[i + 1,:] = reconstruct_arr_v2(init)
+        push!(link_dim, prod(linkdims(init)))
     end
-    return init_copy, storage_arr, truncation_err, link_dim
+    return init, storage_arr, truncation_err, link_dim
 end
 
 function tdvp_time(H, init, t0, T, steps, h_list = [], verbose = false)
@@ -386,9 +493,11 @@ function tdvp2_time(H, init, t0, T, steps, cutoff, h_list = [], verbose = false)
     for i = 1:steps
 
         if length(h_list) > 0
-            init_copy, _ = lr_sweep_2site(H(i), init_copy, h_list[i], cutoff, verbose)
+            init_copy, _ = lr_sweep_2site(H(i), init_copy, h_list[i]/2, cutoff, verbose)
+            init_copy, _ = rl_sweep_2site(H(i), init_copy, h_list[i]/2, cutoff, verbose)
         elseif length(h_list) == 0
-            init_copy, _ = lr_sweep_2site(H(i), init_copy, h, cutoff, verbose)
+            init_copy, _ = lr_sweep_2site(H(i), init_copy, h/2, cutoff, verbose)
+            init_copy, _ = rl_sweep_2site(H(i), init_copy, h/2, cutoff, verbose)
         end
         if verbose == true
             println("Step: ", i)

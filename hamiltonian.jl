@@ -37,7 +37,6 @@ function matrix_form(MPO::MPO, sites)
     N = length(MPO)
     d = dim(sites[1])
     Matrix_Form = zeros(ComplexF64, (d^N, d^N))
-    println(size(Matrix_Form))
     for i = 1:d^N
         vec = zeros(d^N)
         vec[i] = 1.0
@@ -170,7 +169,6 @@ function piecewise_H_MPO_v2(step, pt0, qt0, ground_freq, rot_freq, cross_kerr, d
         
         freq = ground_freq[N - i + 1] - rot_freq[N - i + 1]
         os += freq, "adag", i, "a", i
-        println("Self-kerr: ", self_kerr[N - i + 1])
         os -= 0.5*self_kerr[N - i + 1], "adag", i, "adag", i, "a", i, "a", i
 
         #Don't need to worry about self-kerr with qubits, the self kerr process just becomes 0
