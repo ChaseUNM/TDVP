@@ -201,7 +201,7 @@ function lr_sweep_2site(H, M, h, cutoff, verbose)
         #Evolves the M block forward with the effective Hamiltonian and convert back into a tensor
         M_evolve = exp(-im*H_mat_2*h)*M_vec
         M_evolve = ITensor(M_evolve, M_inds)
-        
+        println("(Row, Col): ", size(H_mat_2))
         
 
         #Performs SVD on the M block to get new left-orthogonal tensor

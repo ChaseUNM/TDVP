@@ -310,9 +310,9 @@ function bond_plots(cutoff_list, TDVP = 2)
     end
     plot!(bd_plot, legendfontsize = 3, legend_background_color=RGBA(1, 1, 1, 0.6), legend=:topleft) 
     display(bd_plot)
-    savefig(bd_plot, "3Q_bd_plot_TDVP2.png")
+    # savefig(bd_plot, "3Q_bd_plot_TDVP2.png")
 end
 
-bond_plots([1E-14, 1E-10, 1E-5, 1E-4, 1E-3], 2)
+bond_plots([1E-4], 2)
 
 #OpSum Testing
