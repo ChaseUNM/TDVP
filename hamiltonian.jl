@@ -407,6 +407,17 @@ function xxx(N, J, g)
     return H
 end
 
+function xxx_v2(N, J, g)
+    H = zeros(ComplexF64, (2^N, 2^N))
+    for j in 1:N - 1
+        H .+= -g*J*s_op(sz, j, N)*s_op(sz, j + 1, N)
+    end
+    for j in 1:N 
+        H .-= J*s_op(sx, j, N)
+    end
+    return H 
+end 
+
 #Sparse version of xxx hamiltonian matrix
 function xxx_sparse(N, J, g)
     H = spzeros(ComplexF64, (2^N, 2^N))

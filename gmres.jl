@@ -46,25 +46,6 @@ function orthoBasis(H, init, tol)
     return krylov_vec
 end
 
-Random.seed!(43)
-init = ones(4)
-init = init/norm(init)
-krylov_vec = []
-push!(krylov_vec, init)
-H = rand(4, 4)
-w, norm_w = ApplyOrthonormlize(H, krylov_vec, 1E-15)
-display(w)
-display(norm_w)
-push!(krylov_vec, w)
-w2, norm_w2 = ApplyOrthonormlize(H, krylov_vec, 1E-15)
-display(w2)
-push!(krylov_vec, w2)
-w3, norm_w3 = ApplyOrthonormlize(H, krylov_vec, 1E-15)
-display(w3'*w3)
-
-k_basis = orthoBasis(H, init, 1E-15)
-println("Checking: ", k_basis[3]'*k_basis[4])
-
 
 function updateT(T, H, krylov_vec)
     n = length(krylov_vec)
@@ -137,31 +118,31 @@ function ApplyOrthonormlize_MPS(H, krylov_vec, tol)
     return w, norm_w
 end
 
-function updateT_MPS(T, H, krylov_vec)
-    n = length(krylov_vec)
-    T_length = length(T)
-    N = Int64(sqrt(T_length))
-    T_n = zeros(ComplexF64, (n, n))
-    # println("T_prev: ", T)
-    T_n[1:N, 1:N] .= T
-    # println("Length of T:", N)
-    # println("Length of n:", n)
-    T_n[n, n] = inner(krylov_vec[n], H, krylov_vec[n])
-    if n > 1
-        T_n[n - 1, n] = inner(krylov_vec[n - 1], H, krylov_vec[n])
-        T_n[n, n - 1] = inner(krylov_vec[n], H, krylov_vec[n - 1])
-    end
-    # for i in 1:n
-    #     if i != n
-    #         T_n[i, i + 1] = inner(krylov_vec[i], H, krylov_vec[n])
-    #         T_n[n ,i] = inner(krylov_vec[n], H, krylov_vec[i])
-    #     else
-    #         T_n[i,i] = inner(krylov_vec[i], H, krylov_vec[i])
-    #     end
-    # end
+# function updateT_MPS(T, H, krylov_vec)
+#     n = length(krylov_vec)
+#     T_length = length(T)
+#     N = Int64(sqrt(T_length))
+#     T_n = zeros(ComplexF64, (n, n))
+#     # println("T_prev: ", T)
+#     T_n[1:N, 1:N] .= T
+#     # println("Length of T:", N)
+#     # println("Length of n:", n)
+#     T_n[n, n] = inner(krylov_vec[n], H, krylov_vec[n])
+#     if n > 1
+#         T_n[n - 1, n] = inner(krylov_vec[n - 1], H, krylov_vec[n])
+#         T_n[n, n - 1] = inner(krylov_vec[n], H, krylov_vec[n - 1])
+#     end
+#     # for i in 1:n
+#     #     if i != n
+#     #         T_n[i, i + 1] = inner(krylov_vec[i], H, krylov_vec[n])
+#     #         T_n[n ,i] = inner(krylov_vec[n], H, krylov_vec[i])
+#     #     else
+#     #         T_n[i,i] = inner(krylov_vec[i], H, krylov_vec[i])
+#     #     end
+#     # end
 
-    return T_n
-end
+#     return T_n
+# end
 
 
 
@@ -169,7 +150,7 @@ function formHessenberg(H, krylov_vec)
     n = length(krylov_vec)
     Hess = zeros(ComplexF64, (n, n - 1))
     for j = 1:n - 1
-        for i = j:n
+        for i = 1:j + 1
             println("(row, col): ($i, $j)") 
             Hess[i,j] = krylov_vec[i]'*H*krylov_vec[j]
         end
@@ -180,12 +161,41 @@ end
 function formHessenberg_MPS(H, krylov_vec)
     n = length(krylov_vec)
     Hess = zeros(ComplexF64, (n, n - 1))
-    for i = 1:n 
-        for j = i  + 1:n - 1
+    for j = 1:n - 1 
+        for i = 1:j + 1
             Hess[i,j] = inner(krylov_vec[i], H, krylov_vec[j])
         end
     end
     return Hess 
+end
+
+function updateT(T, H, krylov_vec)
+    n = length(krylov_vec)
+    println(n)
+    new_T = zeros(ComplexF64, (n, n - 1))
+    if n == 2
+        new_T[1, 1] = T 
+    else
+        new_T[1:n - 1, 1:n - 2] = T 
+    end
+    for i = 1:n 
+        new_T[i, n - 1] = krylov_vec[i]'*H*krylov_vec[n - 1]
+    end
+    return new_T 
+end
+
+function updateT_MPS(T, H, krylov_vec)
+    n = length(krylov_vec)
+    new_T = zeros(ComplexF64, (n, n - 1))
+    if n == 2
+        new_T[1,1] = T
+    else
+        new_T[1:n - 1, 1:n - 2] = T 
+    end
+    for i = 1:n 
+        new_T[i, n - 1] = inner(krylov_vec[i], H, krylov_vec[n - 1])
+    end
+    return new_T 
 end
 
 function gmres_mps(H, init, rhs, tol)
@@ -197,12 +207,15 @@ function gmres_mps(H, init, rhs, tol)
     T = inner(k0, H, k0)
     r0_norm = norm(noprime(H*init) - rhs)
     for i in 2:N
-        println("Krylov Vector: $i")
+        @time begin
+        println("ApplyOrthonormalize")
         w, norm_w = ApplyOrthonormlize_MPS(H, krylov_vec, tol)
+        end
         push!(krylov_vec, w)
-        
-        T = formHessenberg_MPS(H, krylov_vec)
-        display(T)
+        @time begin
+        println("Update T")
+        T = updateT_MPS(T, H, krylov_vec)
+        end
         # T0 .= T
         e1 =  zeros(i)
         e1[1] = 1.0
@@ -231,15 +244,12 @@ function gmres_v1(H, init, rhs, tol)
     println("R0: ", r0)
     println("init: ", init)
     init_copy = copy(init)
-    for i in 2:N
-
+    for i in 2:4
         println("Krylov Vector: $i")
         w, norm_w = ApplyOrthonormlize(H, krylov_vec, tol)
         push!(krylov_vec, w)
         println("krylov_vec list: ", w)
-        T = formHessenberg(H, krylov_vec)
-        println(size(T))
-        H_tilde = zeros(ComplexF64, (i + 1, i))
+        T = updateT(T, H, krylov_vec)
         # H_tilde[1:i, 1:i] .= T 
         # H_tilde[i + 1, i] = krylov_vec[end]'*H*krylov_vec[end - 1]
         # T0 .= T
@@ -254,7 +264,7 @@ function gmres_v1(H, init, rhs, tol)
         println("Length: ", length(krylov_vec))
         r_n = norm(T*y - r0*e1)
         println("Residual norm: ", r_n)
-        if r_n < 1E-10
+        if r_n < 0.29
             for j = 1:length(krylov_vec) - 1
                 init_copy += y[j]*krylov_vec[j]
             end
@@ -270,7 +280,6 @@ N = 3
 sites = siteinds("Qubit", N)
 H_MPO = xxx_mpo(N, sites, 1, 1)
 H_mat = xxx(N, 1, 1)
-display(H_mat)
 
 RHS = ones(2^N)
 RHS = RHS/norm(RHS)
@@ -282,13 +291,13 @@ init_MPS = MPS(init, sites)
 
 
 
-x = gmres_mps(H_MPO, init_MPS, RHS_MPS, 1E-15)
+x = gmres_mps(H_MPO, init_MPS, RHS_MPS, 1E-10)
 
-x_vec, k_basis = gmres_v1(H_mat, init, RHS, 1E-16)
+# x_vec, k_basis = gmres_v1(H_mat, init, RHS, 1E-10)
 
-println(linkdims(x))
+# println(linkdims(x))
 display(reconstruct_arr_v2(x))
-display(x_vec)
+# display(x_vec)
 display(H_mat\RHS)
 # display(H_mat*x - RHS)
 # display(H_mat*x_vec - RHS)

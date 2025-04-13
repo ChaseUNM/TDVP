@@ -6,7 +6,7 @@ include("hamiltonian.jl")
 include("tdvp.jl")
 
 #Create 2 qubit site with the xxx heisenberg model
-N = 7
+N = 3
 sites = siteinds("Qubit", N)
 H = xxx_mpo(N, sites, -1, 1)
 H_mat = xxx(N, -1,1)
@@ -54,8 +54,8 @@ display(A2_arr[:,2,:]*A2_arr[:,2,:]')
 println("Link Dimensions before: ", linkdims(M_init))
 #Set initial time, final time, and number of steps
 t0 = 0.0
-T = 1E-4
-steps = 1
+T = 10.0
+steps = 100
 step_size = (T - t0)/steps
 
 #Run tdvp 
