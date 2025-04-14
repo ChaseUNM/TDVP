@@ -141,6 +141,8 @@ function lr_sweep(H, M, h)
         #Creates effective Hamiltonian matrices and converts the i-th site to a vector
         H_eff = effective_Hamiltonian(H, M, i)
         H_mat, M_vec = conversion(H_eff, M[i])
+        println("H_Mat: ")
+        display(H_mat)
         #Evolves M_vec with H_mat with step size 'h'
         M_evolve = exp(-im*H_mat*h)*M_vec
 
@@ -161,9 +163,12 @@ function lr_sweep(H, M, h)
         #Creates effective Kamiltonian matrix and converts the upper triangular part from the QR into a vector
         K_eff = effective_Kamiltonian(H, M)
         K_mat, R_vec = conversion(K_eff, R)
+        println("K_mat")
+        display(K_mat)
         #Evolves R_vec with K_mat and step size h
         R_evolve = exp(im*K_mat*h)*R_vec
-
+        println("R_evolve")
+        display(R_evolve)
         #Convert R into tensor and multiply it with next tensor in the MPS and then replace
         R_inds = inds(R) 
         R_evolve = ITensor(R_evolve, R_inds)
@@ -173,7 +178,13 @@ function lr_sweep(H, M, h)
     #Performs evolution on last site but without an QR decomposition as the MPS will be completely left-orthogonal.
     H_eff_N = effective_Hamiltonian(H, M, N)
     H_N_mat, M_N_vec = conversion(H_eff_N, M[N])
-    M_N_evolve = exp(-im*H_N_mat*h)*M_N_vec 
+    println("M2_vec pre-evolve")
+    display(M_N_vec)
+    println("H_mat 2")
+    display(H_N_mat)
+    M_N_evolve = exp(-im*H_N_mat*h)*M_N_vec
+    println("M_2 vec")
+    display(M_N_evolve) 
     M_N_inds = inds(M[N])
     M_N_evolve = ITensor(M_N_evolve, M_N_inds)
     M[N] .= M_N_evolve
