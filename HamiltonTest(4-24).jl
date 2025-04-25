@@ -20,8 +20,8 @@ function H_t_MPO(t)
     return piecewise_H_MPO_v2(t, pt_correct_unit, qt_correct_unit, ground_freq, rot_freq, cross_kerr, dipole, N, sites)
 end
 
-pt = npzread("pt_guard_2_spline150.npy")
-qt = npzread("qt_guard_2_spline150.npy")
+pt = npzread("2Qubit_bspline_pt.npy")
+qt = npzread("2Qubit_bspline_qt.npy")
 
 pcof = npzread("pcof_no_guard.npy")
 function construct_pulse(pcof, N) 
@@ -48,8 +48,8 @@ T = 300.0
 
 pt_correct_unit = pt.*(pi/500)
 qt_correct_unit = qt.*(pi/500)
-splines = Int64(length(unique(pt_correct_unit))/2)
-steps = splines
+# splines = Int64(length(unique(pt_correct_unit))/2)
+steps = length(pt_correct_unit)[2]
 step_size = (T - t0)/steps
 pts = size(pt_correct_unit)[2]
 step_size_list = [(count(==(i), qt_correct_unit[1,:])*T/(pts)) for i in unique(qt_correct_unit[1,:])]
@@ -75,9 +75,9 @@ function smallerize(M)
     return M_n 
 end
 
-pt_correct_unit = smallerize(pt_correct_unit)
-qt_correct_unit = smallerize(qt_correct_unit)
-println(size(pt_correct_unit))
+# pt_correct_unit = smallerize(pt_correct_unit)
+# qt_correct_unit = smallerize(qt_correct_unit)
+
 
 function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     init = zeros(ComplexF64, d^N)
@@ -96,15 +96,15 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     end
     
     if TDVP == 1
-        M_N, population = tdvp_time(H_t_MPO, M_init, t0, T, steps, step_size_list, verbose)
+        M_N, population = tdvp_time(H_t_MPO, M_init, t0, T, steps)
         bd = fill(cutoff, length(times_list))
     elseif TDVP == 2
-        M_N, population, bd= tdvp2_time(H_t_MPO, M_init, t0, T, steps, cutoff, step_size_list, verbose)
+        M_N, population, bd= tdvp2_time(H_t_MPO, M_init, t0, T, steps, cutoff)
     end
 
     
-    # pop_pl = plot(times_list, abs2.(population), legend =:top, legend_column = 16, legendfontsize = 3, dpi = 200)
-    # display(pop_pl)
+    pop_pl = plot(times_list, abs2.(population), legend =:top, legend_column = 16, legendfontsize = 3, dpi = 200)
+    display(pop_pl)
     storage_arr = zeros(ComplexF64, (d^N, steps + 1))
     storage_arr[:,1] = init
 
@@ -209,7 +209,7 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     # savefig(bd_plot, "BD_TDVP2_2Guard5E-3.png")
 end
 
-all_plots(2, 1E-3)
+all_plots(1, 1)
 
 function bond_plots(cutoff_list, TDVP = 2)
     
@@ -223,11 +223,11 @@ function bond_plots(cutoff_list, TDVP = 2)
     for i in 1:length(cutoff_list)
         UT = zeros(ComplexF64, d^N, 2^N)
         for j = 1:length(i_l) 
-            _, e, _ = plot_pop(i_l[j], TDVP, cutoff_list[i])
+            _, e, _ = plot_pop(i_l[j], 1, cutoff_list[i])
             UT[:,j] = e
         end
         
-        gate_fidelity = round(1/d^N*(abs.(tr(UT'*V))^N), digits = 5, RoundDown)
+        gate_fidelity = 1/d^N*(abs.(tr(UT'*V))^N)
         println("Gate Fidelity: ", gate_fidelity)
         display(UT)
         _,_,b1 = plot_pop(1, TDVP, cutoff_list[i], true)
@@ -235,16 +235,16 @@ function bond_plots(cutoff_list, TDVP = 2)
         _,_,b3 = plot_pop(5, TDVP, cutoff_list[i], true)
         _,_,b4 = plot_pop(6, TDVP, cutoff_list[i], true)
 
-        plot!(bd_plot[1], times_list, b1, xlabel = "t", ylabel = "Bond Dimension", label = "SVD Cutoff: $(cutoff_list[i]) | Gate Fidelity: $gate_fidelity", linestyle=linestyles[i])
-        plot!(bd_plot[2], times_list, b2, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
-        plot!(bd_plot[3], times_list, b3, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
-        plot!(bd_plot[4], times_list, b4, label = "SVD Cutoff: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[1], times_list, b1, xlabel = "t", ylabel = "Bond Dimension", label = "Bond Dimension: $(cutoff_list[i]) | Gate Fidelity: $gate_fidelity", linestyle=linestyles[i])
+        plot!(bd_plot[2], times_list, b2, label = "Bond Dimension: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[3], times_list, b3, label = "Bond Dimension: $(cutoff_list[i])", linestyle=linestyles[i])
+        plot!(bd_plot[4], times_list, b4, label = "Bond Dimension: $(cutoff_list[i])", linestyle=linestyles[i])
     end
     plot!(bd_plot, legendfontsize = 4, legend_background_color=RGBA(1, 1, 1, 0.6), legend=:topleft) 
     display(bd_plot)
-    savefig(bd_plot, "bd_plot_TDVP2.png")
+    savefig(bd_plot, "bd_plot_TDVP1.png")
 end
 
-bond_plots([1E-10, 1E-7, 1E-4, 1E-3, 1E-2], 2)
+# bond_plots([4, 3, 2, 1], 1)
 
 #OpSum Testing
