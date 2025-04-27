@@ -51,7 +51,7 @@ qt_correct_unit = qt.*(pi/500)
 # splines = Int64(length(unique(pt_correct_unit))/2)
 
 steps = length(pt_correct_unit[1,:])
-# steps = 20
+# steps = 100
 println(steps)
 step_size = (T - t0)/steps
 pts = size(pt_correct_unit)[2]
@@ -134,10 +134,32 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     labels = [L"|00\rangle" L"|01\rangle" L"|10\rangle" L"|11\rangle"], 
     ylabel = "Population Error", xlabel = "t", titlepad = -10)
     ftr = text("Fidelity: $fidelity", :black, :right, 8)
-    p = plot(LinRange(0, T, steps + 1), [abs2.(population[:,1]) abs2.(population[:,2]) abs2.(population[:,5]) abs2.(population[:,6])], legend =:top, legend_column = 16, legendfontsize = 8, 
-    dpi = 200, legend_background_color=RGBA(1, 1, 1, 0.8), titlefont=font(10),
-    labels = [L"|00\rangle" L"|01\rangle" L"|10\rangle" L"|11\rangle"], 
-    ylabel = "Population", xlabel = "t")
+    # p = plot(LinRange(0, T, steps + 1), [abs2.(population[:,1]) abs2.(population[:,2]) abs2.(population[:,5]) abs2.(population[:,6])], legend =:top, legend_column = 16, legendfontsize = 8, 
+    # dpi = 200, legend_background_color=RGBA(1, 1, 1, 0.8), titlefont=font(10),
+    # labels = [L"|00\rangle" L"|01\rangle" L"|10\rangle" L"|11\rangle"], 
+    # ylabel = "Population", xlabel = "t")
+    p = plot(dpi = 200)
+    if loc == 1
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,1]), alpha = 1.0, lw = 2, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    elseif loc == 2
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,2]), alpha = 1, lw = 2, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    elseif loc == 5
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    elseif loc == 6
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0, T, steps + 1), abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    end
     # annotate!((0.6, 1.0), ftr)
     if TDVP == 2
         bd_plot = plot(times_list, bd, ylabel = "Bond Dimension", xlabel = "t", yticks = [1, 2, 3, 4], ylimits = (1,4))
@@ -210,7 +232,7 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     
     # bd_plot = plot(bd1, bd2, bd3, bd4, layout = (2, 2), dpi = 250, size = (800,600))
     
-    # display(plt)
+    display(plt)
     # println("Press 'Enter' to continue")
     # readline()
     title = string("TDVP$(TDVP)_Evolution$str_def$cutoff.png")
@@ -260,6 +282,6 @@ function bond_plots(cutoff_list, TDVP = 2)
     savefig(bd_plot, "bd_plot_TDVP2.png")
 end
 
-bond_plots([0.0, 1E-10, 1E-7, 1E-5, 1E-3], 2)
+# bond_plots([0.0, 1E-10, 1E-7, 1E-5, 1E-3], 2)
 
 #OpSum Testing

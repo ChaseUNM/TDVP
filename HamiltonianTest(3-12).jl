@@ -130,11 +130,75 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     dpi = 200, legend_background_color=RGBA(1, 1, 1, 0.8), titlefont=font(10),
     labels = [L"|00\rangle" L"|01\rangle" L"|10\rangle" L"|11\rangle"], 
     ylabel = "Population Error", xlabel = "t", titlepad = -10)
+    p = plot(dpi = 200)
+    if loc == 1
+        plot!(p, times_list, abs2.(population[:,1]), alpha = 1.0, lw = 2, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    elseif loc == 2
+        plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,2]), alpha = 1, lw = 2, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    elseif loc == 5
+        plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    elseif loc == 6
+        plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, times_list, abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+    end
+    # for i in [1,2,5, 6]
+    #     label_str = lpad(string(i - 1, base = 4), 2, '0')
+    #     if i == 1
+    #         if i == loc 
+    #             plot!(p, times_list, abs2.(population[:,1]), alpha = 1.0, lw = 2, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         else 
+    #             plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         end
+    #     elseif i == 2
+    #         if i == loc 
+    #             plot!(p, times_list, abs2.(population[:,2]), alpha = 1.0, lw = 2, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         else 
+    #             plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         end
+    #     elseif i == 5
+    #         if i == loc 
+    #             plot!(p, times_list, abs2.(population[:,5]), alpha = 1.0, lw = 2, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #             plot!(p, times_list, abs2.(population[:,6]), alpha = 1.0, lw = 2, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         else
+    #             plot!(p, times_list, abs2.(population[:,5]), alpha = 0.5, lw = 1, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #             plot!(p, times_list, abs2.(population[:,6]), alpha = 0.5, lw = 1, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         end
+    #     elseif i == 6 
+    #         if i == loc 
+    #             plot!(p, times_list, abs2.(population[:,5]), alpha = 1.0, lw = 2, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #             plot!(p, times_list, abs2.(population[:,6]), alpha = 1.0, lw = 2, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         else
+    #             plot!(p, times_list, abs2.(population[:,5]), alpha = 0.5, lw = 1, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #             plot!(p, times_list, abs2.(population[:,6]), alpha = 0.5, lw = 1, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10))
+    #         end
+    #     end
+    #     # if i == loc
+    #     #     alpha_val = 1.0
+    #     #     line_w = 2
+    #     # else
+    #     #     alpha_val = 0.5
+    #     #     line_w = 1
+    #     # end
+    #     # plot!(p, times_list, abs2.(population[:,i]), alpha = alpha_val, lw = line_w, label = "|$label_str>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, 
+    #     # legendfontsize = 8, titlefont = font(10))
+    # end
     ftr = text("Fidelity: $fidelity", :black, :right, 8)
-    p = plot(times_list, [abs2.(population[:,1]) abs2.(population[:,2]) abs2.(population[:,5]) abs2.(population[:,6])], legend =:top, legend_column = 16, legendfontsize = 8, 
-    dpi = 200, legend_background_color=RGBA(1, 1, 1, 0.8), titlefont=font(10),
-    labels = [L"|00\rangle" L"|01\rangle" L"|10\rangle" L"|11\rangle"], 
-    ylabel = "Population", xlabel = "t")
+    # p = plot(times_list, abs2.(population[:,loc]), label = "|$bit_string>", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, dpi = 200, titlefont = font(10)) 
+    # for i in setdiff([1,2,5,6], loc)
+    #     label_str = lpad(string(i - 1, base = 4), 2, '0')
+    #     plot!(p, times_list, abs2.(population[:,i]), alpha = 0.5, label = "|$label_str>")
+    # end
     # annotate!((0.6, 1.0), ftr)
     if TDVP == 2
         bd_plot = plot(times_list, bd, ylabel = "Bond Dimension", xlabel = "t", yticks = [1, 2, 3, 4], ylimits = (1,4))
@@ -185,8 +249,6 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     Vtg[3:4, 3:4] .= 0
     Vtg[6,3] = 1.0
     Vtg[5,4] = 1.0
-    display(abs2.(UT))
-    display(Vtg)
     gate_fidelity = abs.(tr(UT'*Vtg))^N/d^N
     println("Gate Fidelity: ", gate_fidelity)
     str = text("Gate Fidelity: $gate_fidelity", 10)
@@ -203,13 +265,13 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     # bd_plot = plot(bd1, bd2, bd3, bd4, layout = (2, 2), dpi = 250, size = (800,600))
     
     display(plt)
-    println("Press 'Enter' to continue")
-    readline()
-    # savefig(plt, "TDVP_EvolutionBD1.png")
+    # println("Press 'Enter' to continue")
+    # readline()
+    savefig(plt, "TDVP2_Evolution1E-4.png")
     # savefig(bd_plot, "BD_TDVP2_2Guard5E-3.png")
 end
 
-all_plots(2, 1E-3)
+# all_plots(2, 1E-4)
 
 function bond_plots(cutoff_list, TDVP = 2)
     
@@ -245,6 +307,6 @@ function bond_plots(cutoff_list, TDVP = 2)
     savefig(bd_plot, "bd_plot_TDVP2.png")
 end
 
-bond_plots([1E-10, 1E-7, 1E-4, 1E-3, 1E-2], 2)
+# bond_plots([1E-10, 1E-7, 1E-4, 1E-3, 1E-2], 2)
 
 #OpSum Testing
