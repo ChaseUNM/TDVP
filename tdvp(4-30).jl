@@ -1,6 +1,19 @@
 using ITensors
 using LinearAlgebra
 
+
+function exp_solver(A, y, h)
+    y_n = exp(A*h)*y
+    return y_n 
+end
+
+function IMR_solver(A, y, t, h)
+    LHS = I + h/2*A 
+    RHS = (I - h/2*A)*y 
+    y_n = RHS\LHS 
+    return y_n 
+end
+
 #Helper function that matches indices between an MPO and MPS
 function match_index(M, R)
     M_inds = inds(M)
@@ -125,7 +138,7 @@ function effective_Kamiltonian(H, M)
 end
 
 #Performs a single left-to-right sweep of an MPS using the tdvp, evolving forward one time step.
-function lr_sweep(H, M, h)
+function lr_sweep(H, M, t, h)
     
     #Ensures orthogonality center is the first site
     orthogonalize!(M, 1)
@@ -143,7 +156,10 @@ function lr_sweep(H, M, h)
         # println("H_Mat: ")
         # display(H_mat)
         #Evolves M_vec with H_mat with step size 'h'
-        M_evolve = exp(-im*H_mat*h)*M_vec
+
+        # M_evolve = exp(-im*H_mat*h)*M_vec
+        # M_evolve = IMR_solver(-im*H_mat, M_vec, t, h)
+        M_evolve = exp_solver(-im*H_mat, M_vec, h)
         #Converts back into a tensor
         M_inds = inds(M[i]) 
         M_evolve = ITensor(M_evolve, M_inds)
@@ -164,7 +180,11 @@ function lr_sweep(H, M, h)
         # println("K_mat")
         # display(K_mat)
         #Evolves R_vec with K_mat and step size h
-        R_evolve = exp(im*K_mat*h)*R_vec
+
+        # R_evolve = exp(im*K_mat*h)*R_vec
+        # R_evolve = IMR_solver(im*H_mat, R_vec, t, h)
+        R_evolve = exp_solver(im*H_mat, R_vec, h)
+
         # println("R_evolve")
         # display(R_evolve)
         #Convert R into tensor and multiply it with next tensor in the MPS and then replace
@@ -180,7 +200,10 @@ function lr_sweep(H, M, h)
     # display(M_N_vec)
     # println("H_mat 2")
     # display(H_N_mat)
-    M_N_evolve = exp(-im*H_N_mat*h)*M_N_vec
+
+    # M_N_evolve = exp(-im*H_N_mat*h)*M_N_vec
+    # M_N_evolve = IMR_solver(-im*H_N_mat, M_N_vec, t, h)
+    M_N_evolve = exp_solver(-im*H_N_mat, M_N_vec, h)
     # println("M_2 vec")
     # display(M_N_evolve) 
     M_N_inds = inds(M[N])
@@ -301,10 +324,11 @@ function tdvp_constant(H, init, t0, T, steps, verbose = false)
     
     #Run time stepper
     for i = 1:steps
+        t0 += h
         if verbose == true
             println("Step: ", i)
         end
-        init_copy = lr_sweep(H, init_copy, h)
+        init_copy = lr_sweep(H, init_copy, t, h)
         storage_arr[i + 1,:] = reconstruct_arr_v2(init_copy)
     end
     
@@ -364,9 +388,11 @@ function tdvp_time(H, init, t0, T, steps, h_list = [], verbose = false)
             println("Step: ", i)
         end
         if length(h_list) > 0
-            init_copy = lr_sweep(H(i), init_copy, h_list[i])
+            t0 += h_list[i]
+            init_copy = lr_sweep(H(i), init_copy, t0, h_list[i])
         elseif length(h_list) == 0
-            init_copy = lr_sweep(H(i), init_copy, h)
+            t0 += h
+            init_copy = lr_sweep(H(i), init_copy, t0, h)
         end
         storage_arr[i + 1,:] = reconstruct_arr_v2(init_copy)
     end
