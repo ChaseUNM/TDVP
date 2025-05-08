@@ -2,7 +2,7 @@ using LinearAlgebra
 using ITensors, ITensorMPS
 using SparseArrays
 
-include("vectorization.jl")
+include("vectorization(5-5).jl")
 
 
 
@@ -33,18 +33,22 @@ a = [0 0; 0 1]
 # ITensors.op(::OpName"a+a'", ::SiteType"Qudit") = a + a'
 # ITensors.op(::OpName"a-a'", ::SiteType"Qudit") = a - a'
 
-function matrix_form(MPO::MPO, sites)
-    N = length(MPO)
+function matrix_form(H::MPO, sites)
+    N = length(H)
+    # sites = siteinds(H)
     d = dim(sites[1])
     Matrix_Form = zeros(ComplexF64, (d^N, d^N))
     for i = 1:d^N
+        println("Col: $i")
         vec = zeros(d^N)
         vec[i] = 1.0
         vec_mps = MPS(vec, sites)
-        mpo_col = MPO*vec_mps
+        mpo_col = H*vec_mps
+        println(vec)
+        println(reconstruct_arr(mpo_col))
         sites2 = siteinds(mpo_col)
         # mpo_col = reconstruct_arr(d, N, mpo_col, sites2)
-        mpo_col = reconstruct_arr_v2(mpo_col)
+        mpo_col = reconstruct_arr(mpo_col)
         Matrix_Form[:,i] = mpo_col
     end
     return Matrix_Form
