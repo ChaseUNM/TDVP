@@ -91,44 +91,6 @@ function H_MPO_v3(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites
     return H 
 end
 
-function H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, c_type, parameters, t, dipole, N, sites)
-    #Construct Hamiltonian Manually with no control 
-
-    ft = 
-    gt = 
-
-    H = MPO(N)
-    
-    s1 = dim(sites[1])
-    s2 = dim(sites[2])
-    a1 = annihilation_operator(s1)
-    a2 = annihilation_operator(s2)
-    l1 = 4 
-    H1 = zeros(s1, s1, l1)
-    H2 = zeros(s2, s2, l1)
-    H1[:,:,1] = (ground_freq[2] - rot_freq[2])*(a1'*a1) - 0.5*self_kerr[1]*(a1'*a1'*a1*a1)
-    H1[:,:,2] = dipole[1,2]*a1'
-    H1[:,:,3] = a1
-
-    
-    H1[:,:,4] = Matrix(1.0*I, s1, s1)
-    
-    H2[:,:,1] = Matrix(1.0*I,  s2, s2)
-    H2[:,:,2] = a2
-    H2[:,:,3] = dipole[1,2]*a2'
-    H2[:,:,4] = (ground_freq[1] - rot_freq[1])*(a2'*a2) - 0.5*self_kerr[2]*(a2'*a2'*a2*a2)
-    display(H2[:,:,4])
-    s1 = sites[1]
-    s2 = sites[2]
-    l1 = Index(l1, "Link, 1")
-    
-    H[1] = ITensor(H1, s1, s1', l1)
-    H[2] = ITensor(H2, s2, s2', l1)
-
-    return H 
-end
-
-
 
 H_s2 = H_MPO_v3(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
 
@@ -328,13 +290,11 @@ Evaluate a B-spline function with carrier waves. See also the `bcparams` constru
     return f
 end
 
-params = reshape(readdlm("params.dat"), 24)
+params = reshape(readdlm("params2.dat"), 160)
 # spline_params = splineparams(200,10,8,params)
-bc_params = bcparams(200.0,3, om, params)
-println(-om/(2*pi)[1,1])
-
-pts = 1222
-t = LinRange(0,200,pts)
+bc_params = bcparams(300.0,20, om, params)
+pts = 54132
+t = LinRange(0,300,pts)
 f_eval = zeros(pts)
 
 for i = 1:pts 
@@ -343,11 +303,81 @@ end
 p1 = plot(t, f_eval)
 
 
-pt = npzread("pt_bspline3.npy")
-qt = npzread("qt_bspline3.npy")
+pt = npzread("2Qubit_bspline_pt2.npy")
+qt = npzread("2Qubit_bspline_qt2.npy")
 
 # plot!(t, qt[2,:])
 # display(p1)
 # p_diff = plot(t, f_eval - qt[2,:])
 
-display(H_s)
+# display(H_s)
+sites = siteinds("Qubit", 2)
+b1 = Index(2, "Link")
+
+practice_MPO = MPO(2)
+H1_arr = zeros(2,2,2)
+H1_arr[:,:,1] = [1 0; 0 -1]
+H1_arr[:,:,2] = [1 0; 0 1]
+H2_arr = zeros(2,2,2)
+H2_arr[:,:,1] = [1 0; 0 1]
+H2_arr[:,:,2] = 2 .*[1 0; 0 -1]
+practice_MPO[1] = ITensor(H1_arr, sites[1], sites[1]', b1)
+practice_MPO[2] = ITensor(H2_arr, sites[2], sites[2]', b1)
+
+# H_mat = matrix_form(practice_MPO, sites)
+# display(H_mat)
+x = [0,1,0,0]
+x_MPS = MPS(x, sites', maxdim = 1)
+println(x_MPS[1])
+println(x_MPS[2])
+psi = apply(practice_MPO, x_MPS; alg ="naive", truncate = false)
+println(psi[1])
+println(psi[2])
+let
+    el = [1,2]
+
+    V = ITensor(1.)
+    for j=1:N
+        V *= psi[j]*state(sites[j],el[j])
+    end
+    v = scalar(V)
+    println("Look at this!: $v")
+end
+
+function H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, c_type, bcparams, t, dipole, N, sites)
+    #Construct Hamiltonian Manually with no control 
+
+    pt_1 = bcarrier2(t, bcparams, 0)
+    qt_1 = bcarrier2(t, bcparams, 1)
+    pt_2 = bcarrier2(t, bcparams, 2)
+    qt_2 = bcarrier2(t, bcparams, 3)
+
+    H = MPO(N)
+    
+    s1 = dim(sites[1])
+    s2 = dim(sites[2])
+    a1 = annihilation_operator(s1)
+    a2 = annihilation_operator(s2)
+    l1 = 4 
+    H1 = zeros(s1, s1, l1)
+    H2 = zeros(s2, s2, l1)
+    H1[:,:,1] = (ground_freq[2] - rot_freq[2])*(a1'*a1) - 0.5*self_kerr[1]*(a1'*a1'*a1*a1) + pt_1*(a1 + a1') + im*qt_1*(a1 - a1')
+    H1[:,:,2] = dipole[1,2]*a1'
+    H1[:,:,3] = a1
+
+    H1[:,:,4] = Matrix(1.0*I, s1, s1)
+    
+    H2[:,:,1] = Matrix(1.0*I,  s2, s2)
+    H2[:,:,2] = a2
+    H2[:,:,3] = dipole[1,2]*a2'
+    H2[:,:,4] = (ground_freq[1] - rot_freq[1])*(a2'*a2) - 0.5*self_kerr[2]*(a2'*a2'*a2*a2) + pt_2*(a2 + a2') + im*qt_2*(a1 - a1')
+    display(H2[:,:,4])
+    s1 = sites[1]
+    s2 = sites[2]
+    l1 = Index(l1, "Link, 1")
+    
+    H[1] = ITensor(H1, s1, s1', l1)
+    H[2] = ITensor(H2, s2, s2', l1)
+
+    return H 
+end
