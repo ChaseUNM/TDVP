@@ -1,9 +1,9 @@
 using ITensors, ITensorMPS 
-using LinearAlgebra, Plots, NPZ, LaTeXStrings
+using LinearAlgebra, Plots, NPZ, LaTeXStrings, DelimitedFiles
 using Plots.PlotMeasures
 gr()
-include("hamiltonian.jl")
-include("tdvp.jl")
+include("hamiltonian(5-5).jl")
+include("tdvp(5-12).jl")
 N = 2
 d = 4
 sites = siteinds("Qudit", N, dim = d)
@@ -14,70 +14,27 @@ dipole = [0 0.005; 0 0]*(2*pi)
 self_kerr = [0.2, 0.2]*(2*pi)
 cross_kerr = zeros(2, 2)
 
+om = zeros(2,2)
+om[1,1] = 0.027532809972830558*2*pi
+om[1,2] = -0.027532809972830558*2*pi 
+om[2,1] = 0.027532809972830558*2*pi 
+om[2,2] = -0.027532809972830558*2*pi
+
+display(d^N)
 H_s = H_sys(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, d)
+H_MPO = H_MPO_manual(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
 
-function H_t_MPO(t)
-    return piecewise_H_MPO_v2(t, pt_correct_unit, qt_correct_unit, ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
-end
+params = reshape(readdlm("params2.dat"), 160)
 
-pt = npzread("pt_guard_2_spline150.npy")
-qt = npzread("qt_guard_2_spline150.npy")
-
-pcof = npzread("pcof_no_guard.npy")
-function construct_pulse(pcof, N) 
-    num_par = length(pcof)
-    par_per_system = Int64(num_par/(2*N))
-    
-    pt = zeros(N, par_per_system)
-    qt = zeros(N, par_per_system)
-    pt[1,:] = pcof[1:par_per_system]
-    pt[2,:] = pcof[2*par_per_system + 1:3*par_per_system]
-    qt[1,:] = pcof[par_per_system + 1:2*par_per_system]
-    qt[2,:] = pcof[3*par_per_system + 1:4*par_per_system]
-    pt = pt
-    qt = qt
-    return pt, qt 
-end
-pcof_re, pcof_im = construct_pulse(pcof, N) 
-splines = size(pcof_re)[2]
 
 t0 = 0
 T = 300.0
 
+steps = 20000
+h = (T - t0)/steps
 
+bc_params = bcparams((T - t0),20, om, params)
 
-pt_correct_unit = pt.*(pi/500)
-qt_correct_unit = qt.*(pi/500)
-splines = Int64(length(unique(pt_correct_unit))/2)
-steps = splines
-step_size = (T - t0)/steps
-pts = size(pt_correct_unit)[2]
-step_size_list = [(count(==(i), qt_correct_unit[1,:])*T/(pts)) for i in unique(qt_correct_unit[1,:])]
-
-times_list = cumsum(vcat(0, step_size_list))
-
-let 
-    
-    pulse1 = plot(range(0, (pts-1))*T/(pts-1), [pt[1,:] qt[1,:]], ylabel = "MHz", xlabel = "t", labels = ["p(t)" "q(t)"], title = "Qubit 1", dpi = 150)
-    pulse2 = plot(range(0, (pts-1))*T/(pts-1), [pt[2,:] qt[2,:]], ylabel = "MHz", xlabel = "t", labels = ["p(t)" "q(t)"], title = "Qubit 2", dpi = 150)
-    pulses_plot = plot(pulse1, pulse2, layout = (2, 1))
-    display(pulses_plot)
-    # savefig(pulses_plot, "B_Spline_pulses_plot.png")
-end
-
-function smallerize(M)
-    row, col = size(M)
-    new_col = Int64(length(unique(pt_correct_unit))/2)
-    M_n = zeros(row, new_col)
-    for i = 1:row
-        M_n[i,:] = [(i) for i in unique(M[i,:])]
-    end
-    return M_n 
-end
-
-pt_correct_unit = smallerize(pt_correct_unit)
-qt_correct_unit = smallerize(qt_correct_unit)
-println(size(pt_correct_unit))
 
 function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     init = zeros(ComplexF64, d^N)
@@ -96,8 +53,8 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     end
     
     if TDVP == 1
-        M_N, population = tdvp_time(H_t_MPO, M_init, t0, T, steps, step_size_list, verbose)
-        bd = fill(cutoff, length(times_list))
+        M_N, population = tdvp_time_IMR(H_MPO, M_init, t0, T, steps, bc_params)
+        bd = fill(cutoff, steps)
     elseif TDVP == 2
         M_N, population, bd= tdvp2_time(H_t_MPO, M_init, t0, T, steps, cutoff, step_size_list, verbose)
     end
@@ -106,24 +63,25 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     # pop_pl = plot(times_list, abs2.(population), legend =:top, legend_column = 16, legendfontsize = 3, dpi = 200)
     # display(pop_pl)
     storage_arr = zeros(ComplexF64, (d^N, steps + 1))
+    # println("length of storage_arr ", size(storage_arr))
     storage_arr[:,1] = init
 
     error = zeros(d^N, steps + 1)
-
+    # println("size of population: ", size(population))
     error[:,1] = population[1,:] - storage_arr[:,1]
-    
-    for i = 1:steps 
-        println("Step $i")
-        H_c = H_ctrl(i, pt_correct_unit, qt_correct_unit, N, d)
-        H_tot = H_s + H_c
-        init = exp(-im*H_tot*step_size_list[i])*init 
-        storage_arr[:,i + 1] = init
-        error[:,i + 1] = abs2.(population[i + 1,:]) - abs2.(init)
-        # display(abs2.(population[i + 1,:]) - abs2.(init))
-        # println(population[i + 1,:] - init)
-        # println(population[i + 1,:])
-        # println(init)
-    end
+
+    # for i = 1:steps 
+    #     println("This is Step $i")
+    #     H_c = H_ctrl(i, pt_correct_unit, qt_correct_unit, N, d)
+    #     H_tot = H_s + H_c
+    #     init = exp(-im*H_tot*h)*init 
+    #     storage_arr[:,i + 1] = init
+    #     error[:,i + 1] = abs2.(population[i + 1,:]) - abs2.(init)
+    #     # display(abs2.(population[i + 1,:]) - abs2.(init))
+    #     # println(population[i + 1,:] - init)
+    #     # println(population[i + 1,:])
+    #     # println(init)
+    # end
 
     fidelity = abs.(inner(M_N, M_out))^2
     error_p = plot(range(0, steps)*(T - t0)/steps, [abs.(error[1,:]) abs.(error[2,:]) abs.(error[3,:]) abs.(error[4,:])], legend =:top, legend_column = 16, legendfontsize = 8, 
@@ -132,25 +90,25 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     ylabel = "Population Error", xlabel = "t", titlepad = -10)
     p = plot(dpi = 200)
     if loc == 1
-        plot!(p, times_list, abs2.(population[:,1]), alpha = 1.0, lw = 2, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,1]), alpha = 1.0, lw = 2, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
     elseif loc == 2
-        plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,2]), alpha = 1, lw = 2, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,2]), alpha = 1, lw = 2, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,5]), alpha = 0.5, lw = 1, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,6]), alpha = 0.5, lw = 1, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
     elseif loc == 5
-        plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
     elseif loc == 6
-        plot!(p, times_list, abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
-        plot!(p, times_list, abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,1]), alpha = 0.5, lw = 1, label = L"|00\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,2]), alpha = 0.5, lw = 1, label = L"|01\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,5]), alpha = 1, lw = 2, label = L"|10\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
+        plot!(p, LinRange(0,300.0,steps + 1), abs2.(population[:,6]), alpha = 1, lw = 2, label = L"|11\rangle", legend_background_color = RGBA(1,1,1,0.8), legend =:top, legend_column = 4, legendfontsize = 8, titlefont = font(10), ylabel = "Population", xlabel = "t")
     end
     # for i in [1,2,5, 6]
     #     label_str = lpad(string(i - 1, base = 4), 2, '0')
@@ -256,7 +214,7 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     for i in i_l
         for j in 1:4
             if abs2.(e_l[i,j]) > 0.0001
-                annotate!(plt[j], times_list[end] - 10, abs2.(e_l[i,j]), text("$(round.(abs2.(e_l[i, j]), digits = 5))", 8, :black))
+                annotate!(plt[j], T - 10.0, abs2.(e_l[i,j]), text("$(round.(abs2.(e_l[i, j]), digits = 5))", 8, :black))
             end
         end 
     end
@@ -271,7 +229,7 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     # savefig(bd_plot, "BD_TDVP2_2Guard5E-3.png")
 end
 
-all_plots(2, 1E-4)
+all_plots(1, 4)
 
 function bond_plots(cutoff_list, TDVP = 2)
     

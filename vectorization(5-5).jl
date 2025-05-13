@@ -25,7 +25,7 @@ function reconstruct_arr(psi)
     reconstruct_arr = zeros(ComplexF64, total_length)
     for i = 1:total_length
         el = int_to_bitarr(i, N)
-        println("el: $el")
+        # println("el: $el")
         el .+= 1
         V = ITensor(1.)
         for j = 1:N
@@ -35,7 +35,7 @@ function reconstruct_arr(psi)
         # println("V: ", V)
         v = scalar(V)
         loc = bitarr_to_int_p_1(reverse(el .- 1))
-        println(loc)
+        # println(loc)
         reconstruct_arr[loc]  = v       
     end
     return reconstruct_arr

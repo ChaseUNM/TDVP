@@ -31,11 +31,11 @@ om[2,1] = 0.027532809972830558*2*pi
 om[2,2] = -0.027532809972830558*2*pi
 
 
-pt = npzread("2Qubit_bspline_pt.npy")
-qt = npzread("2Qubit_bspline_qt.npy")
+# pt = npzread("2Qubit_bspline_pt.npy")
+# qt = npzread("2Qubit_bspline_qt.npy")
 
-pt = npzread("2Qubit_bspline_pt2.npy")
-qt = npzread("2Qubit_bspline_qt2.npy")
+pt = npzread("2Qubit_bspline_pt2.npy").*(pi/500)
+qt = npzread("2Qubit_bspline_qt2.npy").*(pi/500)
 
 H = H_MPO_v2(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
 
@@ -63,131 +63,6 @@ function annihilation_operator(N::Int)
         a[n-1, n] = sqrt(n - 1)
     end
     return a
-end
-
-function H_MPO_v3(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
-    #Construct Hamiltonian Manually with no control 
-    H = MPO(N)
-    
-    s1 = dim(sites[1])
-    s2 = dim(sites[2])
-    a1 = annihilation_operator(s1)
-    a2 = annihilation_operator(s2)
-    l1 = 4 
-    H1 = zeros(s1, s1, l1)
-    H2 = zeros(s2, s2, l1)
-    H1[:,:,1] = (ground_freq[2] - rot_freq[2])*(a1'*a1) - 0.5*self_kerr[1]*(a1'*a1'*a1*a1)
-    H1[:,:,2] = dipole[1,2]*a1'
-    H1[:,:,3] = a1
-
-    
-    H1[:,:,4] = Matrix(1.0*I, s1, s1)
-    
-    H2[:,:,1] = Matrix(1.0*I,  s2, s2)
-    H2[:,:,2] = a2
-    H2[:,:,3] = dipole[1,2]*a2'
-    H2[:,:,4] = (ground_freq[1] - rot_freq[1])*(a2'*a2) - 0.5*self_kerr[2]*(a2'*a2'*a2*a2)
-    display(H2[:,:,4])
-    s1 = sites[1]
-    s2 = sites[2]
-    l1 = Index(l1, "Link, 1")
-    
-    H[1] = ITensor(H1, s1, s1', l1)
-    H[2] = ITensor(H2, s2, s2', l1)
-
-    return H 
-end
-
-
-H_s2 = H_MPO_v3(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
-
-
-display(H_s)
-# display(matrix_form(H_s2, sites))
-
-x = [0,1,0,0]
-x_MPS = MPS(x, sites)
-psi = H_s2*x_MPS
-# let 
-#     entry =  0
-#     for i = 1:4 
-#         entry += H_s2[1][1,1,i]*H_s2[2][1,1,i]
-#     end
-#     println("Entry: $entry")
-# end
-
-# display(reconstruct_arr(psi))
-
-# sites = siteinds("Qubit", 2)
-
-# H_ising = Ising(2)
-# H_ising_MPO = ising_mpo(2, sites)
-
-# display(H_ising)
-
-# x = [0,1,0,0]
-# x_MPS = MPS(x, sites)
-# psi = H_ising_MPO*x_MPS
-
-let
-    el = [1,2]
-
-    V = ITensor(1.)
-    for j=1:N
-        V *= psi[j]*state(sites[j]',el[j])
-    end
-    v = scalar(V)
-    println("Look at this!: $v")
-end
-println(psi[1])
-println(psi[2])
-
-display(reconstruct_arr(psi))
-
-struct splineparams 
-    T::Float64
-    D1::Int64 # Number of coefficients per spline
-    tcenter::Array{Float64,1}
-    dtknot::Float64
-    pcof::Array{Float64,1} # pcof should have D1*Nseg elements
-    Nseg::Int64 # Number of segments (real, imaginary, different ctrl func)
-    Ncoeff:: Int64 # Total number of coefficients
-
-# new, simplified constructor
-    function splineparams(T, D1, Nseg, pcof)
-        dtknot = T/(D1 -2)
-        tcenter = dtknot.*(collect(1:D1) .- 1.5)
-        new(T, D1, tcenter, dtknot, pcof, Nseg, Nseg*D1)
-    end
-
-end
-
-function bspline2(t::Float64, param::splineparams, splinefunc::Int64)
-    f = 0.0
-  
-    dtknot = param.dtknot
-    width = 3*dtknot
-  
-    offset = splinefunc*param.D1
-  
-    k = max.(3, ceil.(Int64,t./dtknot + 2)) # Unsure if this line does what it is supposed to
-    k = min.(k, param.D1)
-  
-    # 1st segment of nurb k
-    tc = param.tcenter[k]
-    tau = (t .- tc)./width
-    f = f + param.pcof[offset+k] * (9/8 .+ 4.5*tau + 4.5*tau^2) # test to remove square for extra speed
-  
-    # 2nd segment of nurb k-1
-    tc = param.tcenter[k-1]
-    tau = (t - tc)./width
-    f = f .+ param.pcof[offset+k.-1] .* (0.75 - 9 *tau^2)
-  
-    # 3rd segment of nurb k-2
-    tc = param.tcenter[k.-2]
-    tau = (t .- tc)./width
-    f = f + param.pcof[offset+k.-2] * (9/8 - 4.5*tau + 4.5*tau.^2)
-    return f
 end
 
 struct bcparams
@@ -298,60 +173,16 @@ Evaluate a B-spline function with carrier waves. See also the `bcparams` constru
 end
 
 params = reshape(readdlm("params2.dat"), 160)
-# spline_params = splineparams(200,10,8,params)
 bc_params = bcparams(300.0,20, om, params)
-pts = 54132
-t = LinRange(0,300,pts)
-f_eval = zeros(pts)
-
-for i = 1:pts 
-    f_eval[i] = bcarrier2(t[i], bc_params, 3)*(500/pi)
-end
-p1 = plot(t, f_eval)
 
 
-pt = npzread("2Qubit_bspline_pt2.npy")
-qt = npzread("2Qubit_bspline_qt2.npy")
+pt = npzread("2Qubit_bspline_pt2.npy").*(pi/500)
+qt = npzread("2Qubit_bspline_qt2.npy").*(pi/500)
 
-# plot!(t, qt[2,:])
-# display(p1)
-# p_diff = plot(t, f_eval - qt[2,:])
 
-# display(H_s)
-sites = siteinds("Qubit", 2)
-b1 = Index(2, "Link")
 
-practice_MPO = MPO(2)
-H1_arr = zeros(2,2,2)
-H1_arr[:,:,1] = [1 0; 0 -1]
-H1_arr[:,:,2] = [1 0; 0 1]
-H2_arr = zeros(2,2,2)
-H2_arr[:,:,1] = [1 0; 0 1]
-H2_arr[:,:,2] = 2 .*[1 0; 0 -1]
-practice_MPO[1] = ITensor(H1_arr, sites[1], sites[1]', b1)
-practice_MPO[2] = ITensor(H2_arr, sites[2], sites[2]', b1)
 
-# H_mat = matrix_form(practice_MPO, sites)
-# display(H_mat)
-x = [0,1,0,0]
-x_MPS = MPS(x, sites', maxdim = 1)
-println(x_MPS[1])
-println(x_MPS[2])
-psi = apply(practice_MPO, x_MPS; alg ="naive", truncate = false)
-println(psi[1])
-println(psi[2])
-let
-    el = [1,2]
-
-    V = ITensor(1.)
-    for j=1:N
-        V *= psi[j]*state(sites[j],el[j])
-    end
-    v = scalar(V)
-    println("Look at this!: $v")
-end
-
-function H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, c_type, bcparams, t, dipole, N, sites)
+function H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, bcparams, t, dipole, N, sites)
     #Construct Hamiltonian Manually with no control 
 
     pt_1 = bcarrier2(t, bcparams, 0)
@@ -366,25 +197,146 @@ function H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, c_type, bcp
     a1 = annihilation_operator(s1)
     a2 = annihilation_operator(s2)
     l1 = 4 
-    H1 = zeros(s1, s1, l1)
-    H2 = zeros(s2, s2, l1)
-    H1[:,:,1] = (ground_freq[2] - rot_freq[2])*(a1'*a1) - 0.5*self_kerr[1]*(a1'*a1'*a1*a1) + pt_2*(a1 + a1') + im*qt_2*(a1 - a1')
-    H1[:,:,2] = dipole[1,2]*a1'
-    H1[:,:,3] = a1
-
-    H1[:,:,4] = Matrix(1.0*I, s1, s1)
+    H1 = zeros(ComplexF64, s1, s1, l1)
+    H2 = zeros(ComplexF64, s2, s2, l1)
+    H1[1,:,:] = (ground_freq[2] - rot_freq[2])*(a1'*a1) - 0.5*self_kerr[2]*(a1'*a1'*a1*a1) + pt_2*(a1 + a1') + im*qt_2*(a1 - a1')
+    H1[2,:,:] = dipole[1,2]*a1'
+    H1[3,:,:] = dipole[1,2]*a1
+    H1[4,:,:] = Matrix(1.0*I, s1, s1)
     
-    H2[:,:,1] = Matrix(1.0*I,  s2, s2)
-    H2[:,:,2] = a2
-    H2[:,:,3] = dipole[1,2]*a2'
-    H2[:,:,4] = (ground_freq[1] - rot_freq[1])*(a2'*a2) - 0.5*self_kerr[2]*(a2'*a2'*a2*a2) + pt_1*(a2 + a2') + im*qt_1*(a1 - a1')
-    display(H2[:,:,4])
+    H2[1,:,:] = Matrix(1.0*I,  s2, s2)
+    H2[2,:,:] = a2
+    H2[3,:,:] = a2'
+    H2[4,:,:] = (ground_freq[1] - rot_freq[1])*(a2'*a2) - 0.5*self_kerr[1]*(a2'*a2'*a2*a2) + pt_1*(a2 + a2') + im*qt_1*(a1 - a1')
     s1 = sites[1]
     s2 = sites[2]
-    l1 = Index(l1, "Link, 1")
+    l1 = Index(l1, "Link, l = 1")
     
-    H[1] = ITensor(H1, s1, s1', l1)
-    H[2] = ITensor(H2, s2, s2', l1)
+    H[1] = ITensor(H1, l1, s1, s1')
+    H[2] = ITensor(H2, l1, s2, s2')
 
     return H 
 end
+
+
+function H_MPO_manual(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
+    #Construct Hamiltonian Manually with no control 
+
+    H = MPO(ComplexF64, sites)
+    
+    s1 = dim(sites[1])
+    s2 = dim(sites[2])
+    a1 = annihilation_operator(s1)
+    a2 = annihilation_operator(s2)
+    l1 = 4 
+    H1 = zeros(ComplexF64, s1, s1, l1)
+    H2 = zeros(ComplexF64, s2, s2, l1)
+    H1[1,:,:] = (ground_freq[2] - rot_freq[2])*(a1'*a1) - 0.5*self_kerr[2]*(a1'*a1'*a1*a1)
+    H1[2,:,:] = dipole[1,2]*a1'
+    H1[3,:,:] = dipole[1,2]*a1
+    H1[4,:,:] = Matrix(1.0*I, s1, s1)
+    
+    H2[1,:,:] = Matrix(1.0*I,  s2, s2)
+    H2[2,:,:] = a2
+    H2[3,:,:] = a2'
+    H2[4,:,:] = (ground_freq[1] - rot_freq[1])*(a2'*a2) - 0.5*self_kerr[1]*(a2'*a2'*a2*a2)
+    s1 = sites[1]
+    s2 = sites[2]
+    l1 = Index(l1, "Link, l = 1")
+    
+    H[1] = ITensor(H1, l1, s1', s1)
+    H[2] = ITensor(H2, l1, s2', s2)
+
+    return H 
+end
+
+function update_H(H_MPO::MPO, bcparams, t)
+    pt_1 = bcarrier2(t, bcparams, 0)
+    qt_1 = bcarrier2(t, bcparams, 1)
+    pt_2 = bcarrier2(t, bcparams, 2)
+    qt_2 = bcarrier2(t, bcparams, 3)
+
+    # println(H_MPO)
+    
+    links = linkinds(H_MPO)
+    site1_inds = siteinds(H_MPO)[1]
+    site2_inds = siteinds(H_MPO)[2]
+
+    site1 = H_MPO[1]
+    site2 = H_MPO[2]
+    # println(site2)
+    # display(Array(H_MPO[1], inds(H_MPO[1]))[1,:,:])
+    # display(Array(site2, inds(site2))[4,:,:])
+    for i = 1:4
+        if i < 4
+            H_MPO[1][links[1] => 1, site1_inds[1] => i, site1_inds[2] => i + 1] = sqrt(i)*(pt_2 + im*qt_2)
+            H_MPO[2][links[1] => 4, site2_inds[1] => i, site2_inds[2] => i + 1] = sqrt(i)*(pt_1 + im*qt_1)
+        end
+        if i > 1
+            H_MPO[1][links[1] => 1, site1_inds[1] => i, site1_inds[2] => i - 1] = sqrt(i - 1)*(pt_2 - im*qt_2)
+            H_MPO[2][links[1] => 4, site2_inds[1] => i, site2_inds[2] => i - 1] = sqrt(i - 1)*(pt_1 - im*qt_1)
+        end
+    end
+    println("-----------------------------------")
+    # site1[links[1] => 1, site1_inds[1] => 1, site1_inds[2] => 2] = 1
+    # site1[links[1] => 1, site1_inds[1] => 2, site1_inds[2] => 1] = 1
+    # site1[links[1] => 1, site1_inds[1] => 2, site1_inds[2] => 3] = sqrt(2)
+    # site1[links[1] => 1, site1_inds[1] => 3, site1_inds[2] => 2] = sqrt(2)
+    # site1[links[1] => 1, site1_inds[1] => 3, site1_inds[2] => 4] = sqrt(3)
+    # site1[links[1] => 1, site1_inds[1] => 4, site1_inds[2] => 3] = sqrt(3)
+    # display(Array(H_MPO[1], inds(H_MPO[1]))[1,:,:])
+
+    # display(Array(site2, inds(site2))[4,:,:])
+    # site2[links[1] => 4, site2_inds[1] => 1, site2_inds[2] => 2] = 1
+    # site2[links[1] => 4, site2_inds[1] => 2, site2_inds[2] => 1] = 1
+    # site2[links[1] => 4, site2_inds[1] => 2, site2_inds[2] => 3] = sqrt(2)
+    # site2[links[1] => 4, site2_inds[1] => 3, site2_inds[2] => 2] = sqrt(2)
+    # site2[links[1] => 4, site2_inds[1] => 3, site2_inds[2] => 4] = sqrt(3)
+    # site2[links[1] => 4, site2_inds[1] => 4, site2_inds[2] => 3] = sqrt(3)
+    return H_MPO
+end
+
+H = H_MPO_manual(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
+pts = 54132
+t_list = LinRange(0,300,pts)
+H_c2 = H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, bc_params, t_list[3], dipole, N, sites)
+println("----------------------------")
+display(Array(H_c2[1], inds(H_c2[1]))[1,:,:])
+println("----------------------------")
+display(Array(H_c[1], inds(H_c[1]))[1,:,:])
+
+f_eval = zeros(pts)
+
+for i = 1:pts 
+    f_eval[i] = bcarrier2(t_list[i], bc_params, 0)*(500/pi)
+end
+
+
+for j = 1:4 
+    display(norm(Array(H_c2[1], inds(H_c2[1]))[j,:,:] - Array(H_c[1], inds(H_c[1]))[j,:,:]))
+    display(norm(Array(H_c2[2], inds(H_c2[2]))[j,:,:] - Array(H_c[2], inds(H_c[2]))[j,:,:]))
+end
+
+
+println("HElo!")
+update_H(H, bc_params, t_list[3])
+println("-------------------------")
+display(Array(H_c2[1], inds(H_c2[1]))[1,:,:])
+
+let 
+    H_man = H_MPO_manual(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
+    for i in 1:pts
+        H_c = piecewise_H_MPO_v2(i, pt, qt, ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
+        H_c2 = H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, bc_params, t_list[i], dipole, N ,sites)
+        H_man = update_H(H_man, bc_params, t_list[i])
+        println("Step $i")
+        # display(Array(H_c[1], inds(H_c[1])))
+        # display(Array(H_man[1], inds(H_man[1])))
+        # println(H_c[2])
+        # println("Step $i")
+        # println("Control Difference: ", bcarrier2(t_list[i], bc_params, 3) - qt[2,i])
+        # println("Difference: ", norm(matrix_form(H_c, sites) - matrix_form(H_c2, sites)))
+        println("Difference: ", norm(H_c - H_man))
+    end
+end
+
