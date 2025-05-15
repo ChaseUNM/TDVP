@@ -325,18 +325,20 @@ display(Array(H_c2[1], inds(H_c2[1]))[1,:,:])
 
 let 
     H_man = H_MPO_manual(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
-    for i in 1:pts
+    display(Array(H_man[1], inds(H_man[1]))[1,:,:])
+    for i in 2:2
         H_c = piecewise_H_MPO_v2(i, pt, qt, ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, sites)
         H_c2 = H_MPO_control(ground_freq, rot_freq, self_kerr, cross_kerr, bc_params, t_list[i], dipole, N ,sites)
         H_man = update_H(H_man, bc_params, t_list[i])
         println("Step $i")
+        display(Array(H_c[1], inds(H_c[1]))[1,:,:])
         # display(Array(H_c[1], inds(H_c[1])))
         # display(Array(H_man[1], inds(H_man[1])))
         # println(H_c[2])
         # println("Step $i")
         # println("Control Difference: ", bcarrier2(t_list[i], bc_params, 3) - qt[2,i])
         # println("Difference: ", norm(matrix_form(H_c, sites) - matrix_form(H_c2, sites)))
-        println("Difference: ", norm(H_c - H_man))
+        # println("Difference: ", norm(H_c - H_man))
     end
 end
 

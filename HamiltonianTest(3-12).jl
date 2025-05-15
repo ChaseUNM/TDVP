@@ -3,7 +3,7 @@ using LinearAlgebra, Plots, NPZ, LaTeXStrings
 using Plots.PlotMeasures
 gr()
 include("hamiltonian.jl")
-include("tdvp.jl")
+include("tdvp(5-14).jl")
 N = 2
 d = 4
 sites = siteinds("Qudit", N, dim = d)
@@ -94,14 +94,13 @@ function plot_pop(loc, TDVP = 1, cutoff = 0.0, verbose = false)
     else
         M_init = MPS(init, sites, maxdim = 1)
     end
-    
     if TDVP == 1
         M_N, population = tdvp_time(H_t_MPO, M_init, t0, T, steps, step_size_list, verbose)
         bd = fill(cutoff, length(times_list))
     elseif TDVP == 2
         M_N, population, bd= tdvp2_time(H_t_MPO, M_init, t0, T, steps, cutoff, step_size_list, verbose)
     end
-
+    println("Norm of final state!: ", norm(M_N))
     
     # pop_pl = plot(times_list, abs2.(population), legend =:top, legend_column = 16, legendfontsize = 3, dpi = 200)
     # display(pop_pl)
@@ -252,7 +251,7 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     gate_fidelity = abs.(tr(UT'*Vtg))^N/d^N
     println("Gate Fidelity: ", gate_fidelity)
     str = text("Gate Fidelity: $gate_fidelity", 10)
-    plt = plot(p1, p2, p3, p4, layout = (2,2), dpi = 250, size = (800, 600), plot_title = "Bond Dimension: $cutoff")
+    plt = plot(p1, p2, p3, p4, layout = (2,2), dpi = 250, size = (800, 600), plot_title = "SVD Cutoff:  $cutoff")
     for i in i_l
         for j in 1:4
             if abs2.(e_l[i,j]) > 0.0001
@@ -267,11 +266,11 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     display(plt)
     # println("Press 'Enter' to continue")
     # readline()
-    # savefig(plt, "TDVP2_Evolution1E-4.png")
+    savefig(plt, "TDVP2_EvolutionSVD1e-2.png")
     # savefig(bd_plot, "BD_TDVP2_2Guard5E-3.png")
 end
 
-all_plots(2, 1E-4)
+all_plots(2, 1E-2)
 
 function bond_plots(cutoff_list, TDVP = 2)
     
@@ -304,9 +303,9 @@ function bond_plots(cutoff_list, TDVP = 2)
     end
     plot!(bd_plot, legendfontsize = 4, legend_background_color=RGBA(1, 1, 1, 0.6), legend=:topleft) 
     display(bd_plot)
-    savefig(bd_plot, "bd_plot_TDVP2.png")
+    savefig(bd_plot, "bd_plot_TDVP2Normalize.png")
 end
 
-# bond_plots([1E-10, 1E-7, 1E-4, 1E-3, 1E-2], 2)
+bond_plots([0.0, 1E-7, 1E-4, 1E-3, 1E-2], 2)
 
 #OpSum Testing

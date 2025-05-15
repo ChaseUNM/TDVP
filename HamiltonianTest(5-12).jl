@@ -27,7 +27,7 @@ H_MPO = H_MPO_manual(ground_freq, rot_freq, self_kerr, cross_kerr, dipole, N, si
 params = reshape(readdlm("params2.dat"), 160)
 
 
-t0 = 0
+t0 = 0.0
 T = 300.0
 
 steps = 20000
@@ -225,7 +225,7 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     display(plt)
     # println("Press 'Enter' to continue")
     # readline()
-    # savefig(plt, "TDVP2_Evolution1E-4.png")
+    savefig(plt, "TDVP_exp_Steps20000.png")
     # savefig(bd_plot, "BD_TDVP2_2Guard5E-3.png")
 end
 

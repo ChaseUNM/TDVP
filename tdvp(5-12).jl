@@ -454,7 +454,7 @@ function tdvp_time_IMR(H, init, t0, T, steps, bcparams, h_list = [], verbose = f
         elseif length(h_list) == 0
             println("t0: ", t0)
             println("t0 + h/2: ", t0 + h/2)
-            H = update_H(H, bcparams, t0 + h/2)
+            H = update_H(H, bcparams, t0)
             init_copy = lr_sweep(H, init_copy, t0, h)
             t0 += h
         end
