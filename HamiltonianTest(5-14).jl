@@ -270,7 +270,7 @@ function all_plots(TDVP = 1, cutoff = 0.0)
     # savefig(bd_plot, "BD_TDVP2_2Guard5E-3.png")
 end
 
-# all_plots(2, 1E-2)
+all_plots(1, 1E-3)
 
 function bond_plots(cutoff, TDVP = 2)
     
@@ -309,6 +309,6 @@ function bond_plots(cutoff, TDVP = 2)
     savefig(bd_plot, "bd_plot.png")
 end
 
-bond_plots(1E-4, 2)
+# bond_plots(1E-4, 2)
 
 #OpSum Testing
