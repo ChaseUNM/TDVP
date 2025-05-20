@@ -2,6 +2,7 @@ using ITensors
 using LinearAlgebra
 
 
+
 function exp_solver(A, y, h)
     y_n = exp(A*h)*y
     return y_n 
@@ -25,7 +26,7 @@ end
 #     y_n = y - im*h*A
 
 function backwards_euler(A, y, h)
-    LHS = (I - h*H)
+    LHS = (I - h*A)
     y_n = LHS\y 
     return y_n 
 end
@@ -154,7 +155,7 @@ function effective_Kamiltonian(H, M)
 end
 
 #Performs a single left-to-right sweep of an MPS using the tdvp, evolving forward one time step.
-function lr_sweep(H, M, t, h)
+function lr_sweep(H, M, t, h, method)
     
     #Ensures orthogonality center is the first site
     orthogonalize!(M, 1)
@@ -176,9 +177,12 @@ function lr_sweep(H, M, t, h)
         #Evolves M_vec with H_mat with step size 'h'
 
         # M_evolve = exp(-im*H_mat*h)*M_vec
-        # M_evolve = IMR_solver(-im*H_mat, M_vec, h)
-        # M_evolve = exp_solver(-im*H_mat, M_vec, h)
-        M_evolve = backwards_euler(-im*H_mat, M_vec, h)
+        if method == 1
+            M_evolve = IMR_solver(-im*H_mat, M_vec, h)
+        else
+            M_evolve = exp_solver(-im*H_mat, M_vec, h)
+        end
+        # M_evolve = backwards_euler(-im*H_mat, M_vec, h)
         # M_evolve = euler(-im*H_mat, M_vec, h)
         # M_evolve = constant_midpoint(-im*H_mat, M_vec, h)
         # println("Difference: ")
@@ -209,9 +213,12 @@ function lr_sweep(H, M, t, h)
         #Evolves R_vec with K_mat and step size h
 
         # R_evolve = exp(im*K_mat*h)*R_vec
-        # R_evolve = IMR_solver(im*K_mat, R_vec, h)
-        # R_evolve = exp_solver(im*K_mat, R_vec, h)
-        R_evolve = backwards_euler(im*K_mat, R_vec, h)
+        if method == 1
+            R_evolve = IMR_solver(im*K_mat, R_vec, h)
+        else
+            R_evolve = exp_solver(im*K_mat, R_vec, h)
+        end
+        # R_evolve = backwards_euler(im*K_mat, R_vec, h)
         # R_evolve = euler(im*K_mat, R_vec, h)
         # R_evolve = constant_midpoint(im*K_mat, R_vec, h)
         # println("R_evolve")
@@ -231,9 +238,12 @@ function lr_sweep(H, M, t, h)
     # display(H_N_mat)
 
     # M_N_evolve = exp(-im*H_N_mat*h)*M_N_vec
-    # M_N_evolve = IMR_solver(-im*H_N_mat, M_N_vec, h)
-    # M_N_evolve = exp_solver(-im*H_N_mat, M_N_vec, h)
-    M_N_evolve = backwards_euler(-im*H_N_mat, M_N_vec, h)
+    if method == 1
+        M_N_evolve = IMR_solver(-im*H_N_mat, M_N_vec, h)
+    else
+        M_N_evolve = exp_solver(-im*H_N_mat, M_N_vec, h)
+    end
+    # M_N_evolve = backwards_euler(-im*H_N_mat, M_N_vec, h)
     # M_N_evolve = euler(-im*H_N_mat, M_N_vec, h)
     # M_N_evolve = constant_midpoint(-im*H_N_mat, M_N_vec, h)
     # println("M_2 vec")
@@ -465,6 +475,49 @@ function tdvp_time_IMR(H, init, t0, T, steps, bcparams, h_list = [], verbose = f
             println("t0 + h/2: ", t0 + h/2)
             H = update_H(H, bcparams, t0)
             init_copy = lr_sweep(H, init_copy, t0, h)
+            t0 += h
+        end
+        storage_arr[i + 1,:] = reconstruct_arr_v2(init_copy)
+    end
+    
+    #Return evolved MPS, as well as state data at each time step
+    return init_copy, storage_arr
+end
+
+function tdvp_time(H, init, t0, T, steps, bcparams, method, h_list = [], verbose = false)
+    if length(h_list) > 0
+        steps = length(h_list)
+    end
+    N = length(init)
+    orthogonalize!(init, 1)
+    sites = siteinds(init)
+    init_copy = copy(init)
+    d = prod(dim(sites))
+    #Get step size
+    h = (T - t0)/steps
+    #Create array to store evolved state
+    storage_arr = zeros(ComplexF64, (steps + 1, d))
+    storage_arr[1,:] = reconstruct_arr_v2(init_copy)
+
+    #Run time stepper
+    for i = 1:steps
+        if verbose == true
+            println("Step: ", i)
+        end
+        if length(h_list) > 0
+            t0 += h_list[i]
+            H = update_H(H, bcparams, t0)
+            init_copy = lr_sweep(H, init_copy, t0, h_list[i])
+        elseif length(h_list) == 0
+            if method == 1
+                H = update_H(H, bcparams, t0 + h/2)
+            else
+                H = update_H(H, bcparams, t0)
+            end
+            println("t0: ", t0)
+            println("t0 + h/2: ", t0 + h/2)
+            # H = update_H(H, bcparams, t0)
+            init_copy = lr_sweep(H, init_copy, t0, h, method)
             t0 += h
         end
         storage_arr[i + 1,:] = reconstruct_arr_v2(init_copy)
